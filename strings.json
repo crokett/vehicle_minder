@@ -1,0 +1,76 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "distance_unit": "Distance unit"
+        },
+        "data_description": {
+          "distance_unit": "Choose the unit used for vehicle mileage and service intervals."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Vehicle Minder is already configured."
+    }
+  },
+  "services": {
+    "add_vehicle": {
+      "name": "Add vehicle",
+      "description": "Add a vehicle to Vehicle Minder.",
+      "fields": {
+        "make": {
+          "name": "Make"
+        },
+        "model": {
+          "name": "Model"
+        },
+        "year": {
+          "name": "Year"
+        }
+      }
+    },
+    "add_maintenance_item": {
+      "name": "Add maintenance item",
+      "description": "Add a maintenance item to a vehicle.",
+      "fields": {
+        "vehicle_id": {
+          "name": "Vehicle"
+        },
+        "name": {
+          "name": "Maintenance item"
+        },
+        "interval_distance": {
+          "name": "Distance interval"
+        },
+        "interval_hours": {
+          "name": "Hour interval"
+        }
+      }
+    },
+    "add_service_record": {
+      "name": "Add service record",
+      "description": "Add a service record to Vehicle Minder.",
+      "fields": {
+        "vehicle": {
+          "name": "Vehicle"
+        },
+        "service_type": {
+          "name": "Service type"
+        },
+        "date": {
+          "name": "Date"
+        },
+        "mileage": {
+          "name": "Mileage"
+        },
+        "cost": {
+          "name": "Cost"
+        },
+        "notes": {
+          "name": "Notes"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+add_vehicle:
+  name: Add vehicle
+  description: Add a vehicle to Vehicle Minder.
+  fields:
+    name:
+      name: Vehicle name
+      description: A friendly name for the vehicle.
+      required: true
+      selector:
+        text:
+
+    make:
+      name: Make
+      description: Vehicle manufacturer.
+      required: true
+      selector:
+        text:
+
+    model:
+      name: Model
+      description: Vehicle model.
+      required: true
+      selector:
+        text:
+
+    year:
+      name: Year
+      description: Model year.
+      required: true
+      selector:
+        number:
+          min: 1900
+          max: 2100
+          mode: box
+
+    vehicle_type:
+      name: Vehicle type
+      description: Type of vehicle, such as car, truck, motorcycle, or boat.
+      required: true
+      selector:
+        text:
+
+    vin:
+      name: VIN
+      description: Vehicle identification number, if applicable.
+      required: false
+      selector:
+        text:

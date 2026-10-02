@@ -1,0 +1,7 @@
+{
+  "services": {
+    "add_vehicle": {
+      "service": "mdi:car"
+    }
+  }
+}

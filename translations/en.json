@@ -1,0 +1,76 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Vehicle Minder is already configured."
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "distance_unit": "Distance unit"
+                },
+                "data_description": {
+                    "distance_unit": "Choose the unit used for vehicle mileage and service intervals."
+                }
+            }
+        }
+    },
+    "services": {
+        "add_maintenance_item": {
+            "description": "Add a maintenance item to a vehicle.",
+            "fields": {
+                "interval_distance": {
+                    "name": "Distance interval"
+                },
+                "interval_hours": {
+                    "name": "Hour interval"
+                },
+                "name": {
+                    "name": "Maintenance item"
+                },
+                "vehicle_id": {
+                    "name": "Vehicle"
+                }
+            },
+            "name": "Add maintenance item"
+        },
+        "add_service_record": {
+            "description": "Add a service record to Vehicle Minder.",
+            "fields": {
+                "cost": {
+                    "name": "Cost"
+                },
+                "date": {
+                    "name": "Date"
+                },
+                "mileage": {
+                    "name": "Mileage"
+                },
+                "notes": {
+                    "name": "Notes"
+                },
+                "service_type": {
+                    "name": "Service type"
+                },
+                "vehicle": {
+                    "name": "Vehicle"
+                }
+            },
+            "name": "Add service record"
+        },
+        "add_vehicle": {
+            "description": "Add a vehicle to Vehicle Minder.",
+            "fields": {
+                "make": {
+                    "name": "Make"
+                },
+                "model": {
+                    "name": "Model"
+                },
+                "year": {
+                    "name": "Year"
+                }
+            },
+            "name": "Add vehicle"
+        }
+    }
+}

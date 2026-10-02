@@ -1,0 +1,155 @@
+"""The vehicle_minder integration."""
+
+import voluptuous as vol
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .const import DOMAIN
+from .models import Vehicle, MaintenanceItem, ServiceRecord
+
+_PLATFORMS: list[Platform] = [Platform.SENSOR]
+
+type ConfigEntry = ConfigEntry[dict[str, Vehicle]]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up the integration from a config entry."""
+
+    # Reconstruct all vehicles and their nested objects from stored data
+    fleet: dict[str, Vehicle] = {}
+    for vehicle_id, vehicle_data in entry.data.get("vehicles", {}).items():
+        maintenance_items = {
+            k: MaintenanceItem(**v)
+            for k, v in vehicle_data.get("maintenance_items", {}).items()
+        }
+        service_records = {
+            k: ServiceRecord(**v)
+            for k, v in vehicle_data.get("service_records", {}).items()
+        }
+        fleet[vehicle_id] = Vehicle(
+            vehicle_id=vehicle_id,
+            name=vehicle_data["name"],
+            vehicle_type=vehicle_data["vehicle_type"],
+            vin=vehicle_data.get("vin"),
+            make=vehicle_data["make"],
+            model=vehicle_data["model"],
+            year=vehicle_data["year"],
+            maintenance_items=maintenance_items,
+            service_records=service_records,
+        )
+
+    # Store the live fleet on the config entry so other parts of the integration can access it
+    entry.runtime_data = fleet
+
+    # Forward to the sensor platform — sensor.py's async_setup_entry will
+    # create one VehicleSensor per vehicle and store async_add_entities so
+    # handle_add_vehicle can register new entities at runtime.
+    await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+
+    def _persist():
+        """Write the current fleet state back to config entry storage."""
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **entry.data,
+                "vehicles": {vehicle_id: vehicle.to_dict() for vehicle_id, vehicle in fleet.items()},
+            },
+        )
+
+    # --- Service: add_vehicle ---
+    async def handle_add_vehicle(call):
+        """Add a new vehicle to the fleet."""
+        from .sensor import VehicleSensor
+
+        vehicle = Vehicle(
+            make=call.data["make"],
+            model=call.data["model"],
+            year=call.data["year"],
+            name=call.data["name"],
+            vehicle_type=call.data["vehicle_type"],
+            vin=call.data.get("vin"),
+        )
+        fleet[vehicle.vehicle_id] = vehicle
+        _persist()
+
+        # Register the new vehicle as a sensor entity immediately
+        async_add_entities: AddEntitiesCallback = hass.data[DOMAIN][entry.entry_id]
+        async_add_entities([VehicleSensor(vehicle)])
+
+    hass.services.async_register(
+        DOMAIN,
+        "add_vehicle",
+        handle_add_vehicle,
+        schema=vol.Schema(
+            {
+                vol.Required("make"): str,
+                vol.Required("model"): str,
+                vol.Required("year"): int,
+                vol.Required("name"): str,
+                vol.Required("vehicle_type"): str,
+                vol.Optional("vin"): str,
+            }
+        ),
+    )
+
+    # --- Service: add_maintenance_item ---
+    async def handle_add_maintenance_item(call):
+        """Add a maintenance item to a specific vehicle."""
+        vehicle_id = call.data["vehicle_id"]
+        if vehicle_id not in fleet:
+            raise ValueError(f"Vehicle '{vehicle_id}' not found")
+
+        item = MaintenanceItem(
+            name=call.data["name"],
+            interval_distance=call.data.get("interval_distance"),
+            interval_hours=call.data.get("interval_hours"),
+        )
+        fleet[vehicle_id].maintenance_items[item.item_id] = item
+        _persist()
+
+    hass.services.async_register(
+        DOMAIN,
+        "add_maintenance_item",
+        handle_add_maintenance_item,
+        schema=vol.Schema(
+            {
+                vol.Required("vehicle_id"): str,
+                vol.Required("name"): str,
+                vol.Exclusive("interval_distance", "interval"): int,
+                vol.Exclusive("interval_hours", "interval"): int,
+            }
+        ),
+    )
+
+    # --- Service: add_service_record ---
+    async def handle_add_service_record(call):
+        """Add a completed service record to a specific vehicle."""
+        vehicle_id = call.data["vehicle_id"]
+        if vehicle_id not in fleet:
+            raise ValueError(f"Vehicle '{vehicle_id}' not found")
+
+        record = ServiceRecord(
+            date=call.data["date"],
+            mileage=call.data["mileage"],
+            description=call.data["description"],
+        )
+        fleet[vehicle_id].service_records[record.record_id] = record
+        _persist()
+
+    hass.services.async_register(
+        DOMAIN,
+        "add_service_record",
+        handle_add_service_record,
+        schema=vol.Schema(
+            {
+                vol.Required("vehicle_id"): str,
+                vol.Required("date"): str,
+                vol.Required("mileage"): int,
+                vol.Required("description"): str,
+            }
+        ),
+    )
+
+    return True
