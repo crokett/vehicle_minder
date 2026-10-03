@@ -149,7 +149,9 @@ async def async_setup_entry(
         record = ServiceRecord(
             date=call.data["date"],
             mileage=call.data["mileage"],
-            description=call.data["description"],
+            service_type=call.data["service_type"],
+            notes=call.data["notes"],
+            cost=call.data["cost"],
         )
 
         fleet[vehicle_id].service_records[record.record_id] = record
@@ -163,8 +165,16 @@ async def async_setup_entry(
             {
                 vol.Required("vehicle_id"): str,
                 vol.Required("date"): str,
-                vol.Required("mileage"): int,
-                vol.Required("description"): str,
+                vol.Required("mileage"): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=0),
+                ),
+                vol.Required("service_type"): str,
+                vol.Required("notes"): str,
+                vol.Required("cost"): vol.All(
+                    vol.Coerce(float),
+                    vol.Range(min=0),
+                ),
             }
         ),
     )

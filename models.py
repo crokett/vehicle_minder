@@ -43,14 +43,18 @@ class ServiceRecord:
         self,
         date: str,
         mileage: int,
-        description: str,
+        service_type: str,
+        notes: str,
+        cost: float,
         record_id: str | None = None,
     ) -> None:
         """Initialize a service record."""
         self.record_id = record_id or f"record_{uuid.uuid4().hex[:8]}"
         self.date = date
         self.mileage = mileage
-        self.description = description
+        self.service_type = service_type
+        self.notes = notes
+        self.cost = cost
 
     def to_dict(self) -> dict:
         """Convert the service record to a dictionary."""
@@ -58,9 +62,10 @@ class ServiceRecord:
             "record_id": self.record_id,
             "date": self.date,
             "mileage": self.mileage,
-            "description": self.description,
+            "service_type": self.service_type,
+            "notes": self.notes,
+            "cost": self.cost,
         }
-
 
 class Vehicle:
     """Represent a vehicle."""

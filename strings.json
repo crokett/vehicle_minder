@@ -19,6 +19,9 @@
       "name": "Add vehicle",
       "description": "Add a vehicle to Vehicle Minder.",
       "fields": {
+        "name": {
+          "name" : "Name"
+        },
         "make": {
           "name": "Make"
         },
@@ -27,6 +30,12 @@
         },
         "year": {
           "name": "Year"
+        },
+        "vehicle_type":{
+          "name": "Vehicle Type"
+        },
+        "vin": {
+          "name": "VIN"
         }
       }
     },
@@ -52,8 +61,8 @@
       "name": "Add service record",
       "description": "Add a service record to Vehicle Minder.",
       "fields": {
-        "vehicle": {
-          "name": "Vehicle"
+        "vehicle_id": {
+          "name": "Vehicle ID"
         },
         "service_type": {
           "name": "Service type"
