@@ -46,6 +46,7 @@ class VehicleSensor(SensorEntity):
     def extra_state_attributes(self) -> dict:
         """Return vehicle details as extra state attributes."""
         return {
+            "vehicle_id": self._vehicle.vehicle_id,
             "vehicle_type": self._vehicle.vehicle_type,
             "vin": self._vehicle.vin,
             "make": self._vehicle.make,

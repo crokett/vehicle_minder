@@ -1,31 +1,22 @@
 add_vehicle:
-  name: Add vehicle
-  description: Add a vehicle to Vehicle Minder.
+  target: {}
   fields:
     name:
-      name: Vehicle name
-      description: A friendly name for the vehicle.
       required: true
       selector:
         text:
 
     make:
-      name: Make
-      description: Vehicle manufacturer.
       required: true
       selector:
         text:
 
     model:
-      name: Model
-      description: Vehicle model.
       required: true
       selector:
         text:
 
     year:
-      name: Year
-      description: Model year.
       required: true
       selector:
         number:
@@ -34,15 +25,71 @@ add_vehicle:
           mode: box
 
     vehicle_type:
-      name: Vehicle type
-      description: Type of vehicle, such as car, truck, motorcycle, or boat.
       required: true
       selector:
         text:
 
     vin:
-      name: VIN
-      description: Vehicle identification number, if applicable.
       required: false
       selector:
         text:
+
+set_mileage:
+  target: {}
+  fields:
+    vehicle_id:
+      required: true
+      selector: 
+        text:
+
+    mileage:
+      required: true
+      selector:
+        number:
+
+add_maintenance_item:
+  target: {}
+  fields:
+    vehicle_id:
+      required: true
+      selector:
+        text:
+
+    name:
+      required: true
+      selector:
+        text:
+
+    interval_distance:
+      required: false
+      selector:
+        number:
+          min: 1
+          mode: box
+
+    interval_hours:
+      required: false
+      selector:
+        number:
+          min: 1
+          mode: box
+
+add_service_record:
+  target: {}
+  fields:
+    vehicle_id:
+      required: true
+      selector:
+        text:
+    
+    date:
+      required: true
+      selector:
+        date:
+    
+    mileage:
+      required: true
+      selector:
+        number:
+          min: 0
+          mode: box

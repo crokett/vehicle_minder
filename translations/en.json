@@ -60,6 +60,9 @@
         "add_vehicle": {
             "description": "Add a vehicle to Vehicle Minder.",
             "fields": {
+                "name": {
+                    "name": "Vehicle name"
+                },
                 "make": {
                     "name": "Make"
                 },
@@ -68,9 +71,30 @@
                 },
                 "year": {
                     "name": "Year"
-                }
+                },
+                 "vehicle_type": {
+                     "name": "Vehicle type"
+              },
+                 "vin": {
+                    "name": "VIN"
+             },
+                 "current_mileage": {
+                     "name": "Current mileage"
+             }
             },
             "name": "Add vehicle"
-        }
+        },
+       "set_mileage": {
+            "name": "Set mileage",
+             "description": "Set the current mileage of a vehicle.",
+                 "fields": {
+                 "vehicle_id": {
+                  "name": "Vehicle ID"
+                 },
+                "mileage": {
+                    "name": "Mileage"
+                 }
+            }
+        }       
     }
 }

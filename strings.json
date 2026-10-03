@@ -71,6 +71,20 @@
           "name": "Notes"
         }
       }
+    },
+    "set_mileage": {
+  "name": "Set mileage",
+  "description": "Set the current mileage of a vehicle.",
+  "fields": {
+    "vehicle_id": {
+      "name": "Vehicle ID",
+      "description": "The ID of the vehicle."
+    },
+    "mileage": {
+      "name": "Mileage",
+      "description": "The current mileage of the vehicle."
     }
+  }
+  }
   }
 }

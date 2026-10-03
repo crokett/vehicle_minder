@@ -74,7 +74,7 @@ async def async_setup_entry(
             }
         ),
     )
-      # --- Service: set_mileage ---
+    # --- Service: set_mileage ---
     async def handle_set_mileage(call) -> None:
         """Set the current mileage for a vehicle."""
         vehicle_id = call.data["vehicle_id"]
@@ -105,6 +105,7 @@ async def async_setup_entry(
             }
         ),
     )
+    # --- Service: set_mileage ---
 
     # --- Service: add_maintenance_item ---
     async def handle_add_maintenance_item(call) -> None:

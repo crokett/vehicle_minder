@@ -2,6 +2,15 @@
   "services": {
     "add_vehicle": {
       "service": "mdi:car"
+    },
+    "set_mileage": {
+      "service": "mdi:counter"
+    },
+    "add_maintenance_item": {
+      "service": "mdi:wrench"
+    },
+    "add_service_record": {
+      "service": "mdi:clipboard-check"
     }
   }
 }
