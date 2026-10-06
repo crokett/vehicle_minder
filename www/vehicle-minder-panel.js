@@ -31,6 +31,24 @@ function lastServicedDate(vehicle, itemName) {
   return matches.length ? matches[0].date : null;
 }
 
+// Find the pre-computed status entry for a maintenance item by name.
+// Falls back to a simple local calculation if maintenance_status is absent
+// (e.g. before the sensor attribute propagates).
+function getItemStatus(vehicle, itemName) {
+  const statuses = vehicle.maintenance_status || [];
+  return statuses.find((s) => s.name.toLowerCase() === itemName.toLowerCase()) || null;
+}
+
+function fmtOverdueBy(status) {
+  if (!status || !status.overdue) return null;
+  const type = status.interval_type;
+  const by = status.overdue_by;
+  if (type === "distance") return `${fmt(by)} mi overdue`;
+  if (type === "hours")    return `${fmt(by)} hrs overdue`;
+  if (type === "months")   return `${by} day${by !== 1 ? "s" : ""} overdue`;
+  return "overdue";
+}
+
 // ---------------------------------------------------------------------------
 // Styles — uses HA CSS variables so it blends with any theme
 // ---------------------------------------------------------------------------
@@ -416,6 +434,55 @@ const STYLES = `
     background: var(--primary-color);
     color: #fff;
   }
+
+  /* ── Overdue warning badge (inline in vehicle name) ── */
+  .overdue-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--error-color, #db4437) 15%, transparent);
+    color: var(--error-color, #db4437);
+    font-size: .75rem;
+    font-weight: 600;
+    vertical-align: middle;
+  }
+
+  /* Alert state for the vehicle icon circle */
+  .vehicle-icon--alert {
+    background: color-mix(in srgb, var(--error-color, #db4437) 15%, transparent);
+    color: var(--error-color, #db4437);
+  }
+
+  /* ── Status chips in maintenance table ── */
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-size: .76rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .status-chip--overdue {
+    background: color-mix(in srgb, var(--error-color, #db4437) 15%, transparent);
+    color: var(--error-color, #db4437);
+  }
+  .status-chip--ok {
+    background: color-mix(in srgb, var(--success-color, #4caf50) 15%, transparent);
+    color: var(--success-color, #4caf50);
+  }
+  .status-chip--unknown {
+    color: var(--secondary-text-color);
+  }
+
+  /* Highlight overdue rows in the maintenance table */
+  .row-overdue td:first-child {
+    border-left: 3px solid var(--error-color, #db4437);
+    padding-left: 9px;
+  }
 `;
 
 // ---------------------------------------------------------------------------
@@ -431,6 +498,8 @@ const ICON = {
   speedometer: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h2v-6h-2v6zm0-8h2V7h-2v2z"/></svg>`,
   close: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`,
   info: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`,
+  warning: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`,
+  check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`,
 };
 
 // ---------------------------------------------------------------------------
@@ -553,12 +622,18 @@ class VehicleMinderPanel extends HTMLElement {
     const mileage = `${fmt(v.current_mileage)} mi`;
     const maintCount = Object.keys(v.maintenance_items).length;
     const svcCount = Object.keys(v.service_records).length;
+    const overdueCount = v.overdue_count || 0;
+    const overdueWarning = overdueCount > 0
+      ? `<span class="overdue-badge" title="${overdueCount} maintenance item${overdueCount !== 1 ? "s" : ""} overdue">
+           ${ICON.warning} ${overdueCount} overdue
+         </span>`
+      : "";
 
     return `
       <div class="vehicle-row" data-action="select-vehicle" data-id="${v.vehicle_id}">
-        <div class="vehicle-icon">${ICON.car}</div>
+        <div class="vehicle-icon${overdueCount > 0 ? " vehicle-icon--alert" : ""}">${ICON.car}</div>
         <div class="vehicle-info">
-          <div class="vehicle-name">${this._escape(v.name)}</div>
+          <div class="vehicle-name">${this._escape(v.name)} ${overdueWarning}</div>
           <div class="vehicle-sub">${this._escape(sub)}${v.vin ? ` · ${v.vin}` : ""}</div>
         </div>
         <div class="vehicle-actions" data-stop-propagation="1">
@@ -694,15 +769,27 @@ class VehicleMinderPanel extends HTMLElement {
 
     const rows = items
       .map((item) => {
-        const interval = item.interval_distance
-          ? `Every ${fmt(item.interval_distance)} mi`
-          : `Every ${fmt(item.interval_hours)} hrs`;
-        const lastDate = lastServicedDate(vehicle, item.name);
+        let interval;
+        if (item.interval_distance) interval = `Every ${fmt(item.interval_distance)} mi`;
+        else if (item.interval_hours) interval = `Every ${fmt(item.interval_hours)} hrs`;
+        else if (item.interval_months) interval = `Every ${fmt(item.interval_months)} month${item.interval_months !== 1 ? "s" : ""}`;
+        else interval = "—";
+
+        const status = getItemStatus(vehicle, item.name);
+        const lastDate = status ? status.last_service_date : lastServicedDate(vehicle, item.name);
+        const overdue = status && status.overdue;
+        const overdueLabel = overdue
+          ? `<span class="status-chip status-chip--overdue">${ICON.warning} ${fmtOverdueBy(status)}</span>`
+          : status && status.last_service_date
+            ? `<span class="status-chip status-chip--ok">${ICON.check} OK</span>`
+            : `<span class="status-chip status-chip--unknown">—</span>`;
+
         return `
-        <tr>
+        <tr class="${overdue ? "row-overdue" : ""}">
           <td>${this._escape(item.name)}</td>
           <td>${interval}</td>
           <td>${lastDate ? fmtDate(lastDate) : '<span style="color:var(--secondary-text-color)">Never</span>'}</td>
+          <td>${overdueLabel}</td>
         </tr>`;
       })
       .join("");
@@ -714,7 +801,7 @@ class VehicleMinderPanel extends HTMLElement {
       </div>
       <table class="data-table">
         <thead><tr>
-          <th>Item</th><th>Interval</th><th>Last Serviced</th>
+          <th>Item</th><th>Interval</th><th>Last Serviced</th><th>Status</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -837,6 +924,8 @@ class VehicleMinderPanel extends HTMLElement {
           <label for="vm-int-dist">By Miles</label>
           <input type="radio" name="vm-interval-type" id="vm-int-hrs" value="hours">
           <label for="vm-int-hrs">By Hours</label>
+          <input type="radio" name="vm-interval-type" id="vm-int-months" value="months">
+          <label for="vm-int-months">By Months</label>
         </div>
       </div>
       <div class="form-group" id="vm-dist-group">
@@ -846,6 +935,10 @@ class VehicleMinderPanel extends HTMLElement {
       <div class="form-group" id="vm-hrs-group" style="display:none">
         <label class="form-label">Every (hours) *</label>
         <input class="form-input" id="vm-interval-hours" type="number" placeholder="100" min="1">
+      </div>
+      <div class="form-group" id="vm-months-group" style="display:none">
+        <label class="form-label">Every (months) *</label>
+        <input class="form-input" id="vm-interval-months" type="number" placeholder="12" min="1">
       </div>
       <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
     `, "Add Item");
@@ -918,12 +1011,12 @@ class VehicleMinderPanel extends HTMLElement {
     // Interval type toggle in add-maintenance modal
     root.addEventListener("change", (e) => {
       if (e.target.name === "vm-interval-type") {
-        const dist = root.getElementById("vm-dist-group");
-        const hrs = root.getElementById("vm-hrs-group");
-        if (dist && hrs) {
-          dist.style.display = e.target.value === "distance" ? "" : "none";
-          hrs.style.display = e.target.value === "hours" ? "" : "none";
-        }
+        const dist   = root.getElementById("vm-dist-group");
+        const hrs    = root.getElementById("vm-hrs-group");
+        const months = root.getElementById("vm-months-group");
+        if (dist) dist.style.display   = e.target.value === "distance" ? "" : "none";
+        if (hrs)  hrs.style.display    = e.target.value === "hours"    ? "" : "none";
+        if (months) months.style.display = e.target.value === "months" ? "" : "none";
       }
     });
 
@@ -986,10 +1079,14 @@ class VehicleMinderPanel extends HTMLElement {
             const d = parseInt(val("vm-interval-distance"), 10);
             if (!d) { alert("Please enter a valid mileage interval."); return; }
             serviceData.interval_distance = d;
-          } else {
+          } else if (intervalType === "hours") {
             const h = parseInt(val("vm-interval-hours"), 10);
             if (!h) { alert("Please enter a valid hours interval."); return; }
             serviceData.interval_hours = h;
+          } else if (intervalType === "months") {
+            const m = parseInt(val("vm-interval-months"), 10);
+            if (!m) { alert("Please enter a valid months interval."); return; }
+            serviceData.interval_months = m;
           }
           this._callService("add_maintenance_item", serviceData);
           break;

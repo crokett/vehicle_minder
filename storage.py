@@ -33,7 +33,13 @@ class VehicleMinderStore:
 
         for vehicle_id, vehicle_data in data.get("vehicles", {}).items():
             maintenance_items = {
-                item_id: MaintenanceItem(**item_data)
+                item_id: MaintenanceItem(
+                    item_id=item_data.get("item_id"),
+                    name=item_data["name"],
+                    interval_distance=item_data.get("interval_distance"),
+                    interval_hours=item_data.get("interval_hours"),
+                    interval_months=item_data.get("interval_months"),
+                )
                 for item_id, item_data in vehicle_data.get(
                     "maintenance_items", {}
                 ).items()
@@ -55,9 +61,9 @@ class VehicleMinderStore:
                 model=vehicle_data["model"],
                 year=vehicle_data["year"],
                 current_mileage=vehicle_data.get("current_mileage", 0),
+                current_hours=vehicle_data.get("current_hours", 0),
                 maintenance_items=maintenance_items,
                 service_records=service_records,
-                
             )
 
         return fleet

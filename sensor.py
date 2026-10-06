@@ -53,10 +53,13 @@ class VehicleSensor(SensorEntity):
             "model": self._vehicle.model,
             "year": self._vehicle.year,
             "current_mileage": self._vehicle.current_mileage,
+            "current_hours": self._vehicle.current_hours,
+            "overdue_count": self._vehicle.overdue_count,
             "maintenance_items": [
                 item.to_dict()
                 for item in self._vehicle.maintenance_items.values()
             ],
+            "maintenance_status": self._vehicle.maintenance_status(),
             "service_records": [
                 record.to_dict()
                 for record in self._vehicle.service_records.values()
