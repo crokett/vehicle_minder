@@ -543,6 +543,9 @@ class VehicleMinderPanel extends HTMLElement {
         vehicle_type: attrs.vehicle_type || "car",
         vin: attrs.vin || null,
         current_mileage: Number(state.state) || attrs.current_mileage || 0,
+        current_hours: attrs.current_hours || 0,
+        overdue_count: attrs.overdue_count || 0,
+        maintenance_status: attrs.maintenance_status || [],
         maintenance_items: this._indexById(attrs.maintenance_items || [], "item_id"),
         service_records: this._indexById(attrs.service_records || [], "record_id"),
       };
