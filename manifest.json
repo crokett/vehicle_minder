@@ -5,7 +5,7 @@
     "@crokett"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://www.home-assistant.io/integrations/vehicle_minder",
   "homekit": {},
   "integration_type": "device",

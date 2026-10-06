@@ -10,11 +10,18 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .models import MaintenanceItem, ServiceRecord, Vehicle
+from .panel import async_setup_panel
 from .storage import VehicleMinderStore
 
 _PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 type VehicleMinderConfigEntry = ConfigEntry[dict[str, Vehicle]]
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the Vehicle Minder integration (panel registration)."""
+    await async_setup_panel(hass)
+    return True
 
 
 async def async_setup_entry(
