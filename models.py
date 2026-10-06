@@ -14,6 +14,7 @@ class MaintenanceItem:
         item_id: str | None = None,
         interval_distance: int | None = None,
         interval_hours: int | None = None,
+        interval_months: int | None = None,
     ) -> None:
         """Initialize a maintenance item."""
         if (interval_distance is None) == (interval_hours is None):
