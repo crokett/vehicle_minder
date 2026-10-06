@@ -198,4 +198,31 @@ async def async_setup_entry(
         ),
     )
 
+    # --- Service: delete_vehicle ---
+    async def handle_delete_vehicle(call) -> None:
+        """Remove a vehicle and all its data from the fleet."""
+        vehicle_id = call.data["vehicle_id"]
+
+        if vehicle_id not in fleet:
+            raise ValueError(f"Vehicle '{vehicle_id}' not found")
+
+        del fleet[vehicle_id]
+        await store.async_save(fleet)
+
+        runtime = hass.data[DOMAIN][entry.entry_id]
+        entity = runtime["entities"].pop(vehicle_id, None)
+        if entity:
+            await entity.async_remove()
+
+    hass.services.async_register(
+        DOMAIN,
+        "delete_vehicle",
+        handle_delete_vehicle,
+        schema=vol.Schema(
+            {
+                vol.Required("vehicle_id"): str,
+            }
+        ),
+    )
+
     return True

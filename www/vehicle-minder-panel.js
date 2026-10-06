@@ -500,6 +500,7 @@ const ICON = {
   info: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`,
   warning: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`,
   check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`,
+  trash: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`,
 };
 
 // ---------------------------------------------------------------------------
@@ -704,6 +705,9 @@ class VehicleMinderPanel extends HTMLElement {
               <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="update_mileage" data-id="${vehicle.vehicle_id}">
                 ${ICON.speedometer} Update Mileage
               </button>
+              <button class="btn btn-danger btn-sm" data-action="open-modal" data-modal="delete_vehicle" data-id="${vehicle.vehicle_id}">
+                ${ICON.trash} Delete Vehicle
+              </button>
             </div>
             <div class="tabs">
               <div class="tab${this._activeTab === "service" ? " active" : ""}" data-action="tab" data-tab="service">Service Records</div>
@@ -817,6 +821,7 @@ class VehicleMinderPanel extends HTMLElement {
       case "add_service":     return this._modalAddService(vehicleId);
       case "add_maintenance": return this._modalAddMaintenance(vehicleId);
       case "update_mileage":  return this._modalUpdateMileage(vehicleId);
+      case "delete_vehicle":  return this._modalDeleteVehicle(vehicleId);
       default: return "";
     }
   }
@@ -959,6 +964,21 @@ class VehicleMinderPanel extends HTMLElement {
     `, "Update");
   }
 
+  _modalDeleteVehicle(vehicleId) {
+    const vehicle = this._fleet[vehicleId];
+    const name = vehicle ? vehicle.name : vehicleId;
+    return this._modalWrap("Delete Vehicle", `
+      <p style="margin:0;line-height:1.6">
+        Are you sure you want to delete <strong>${this._escape(name)}</strong>?
+      </p>
+      <p style="margin:8px 0 0;font-size:.85rem;color:var(--error-color,#db4437)">
+        This will permanently remove the vehicle and all its service records
+        and maintenance items. This cannot be undone.
+      </p>
+      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
+    `, "Delete");
+  }
+
   // ── Event binding ──────────────────────────────────────────────────────────
 
   _bindEvents() {
@@ -1096,6 +1116,14 @@ class VehicleMinderPanel extends HTMLElement {
           const mileage = parseInt(val("vm-new-mileage"), 10);
           if (isNaN(mileage)) { alert("Please enter a valid mileage."); return; }
           this._callService("set_mileage", { vehicle_id, mileage });
+          break;
+        }
+        case "delete_vehicle": {
+          const vehicle_id = val("vm-vehicle-id");
+          this._callService("delete_vehicle", { vehicle_id });
+          // Return to fleet view — the vehicle is gone
+          this._view = "fleet";
+          this._selectedId = null;
           break;
         }
       }
