@@ -126,10 +126,16 @@ async def async_setup_entry(
             name=call.data["name"],
             interval_distance=call.data.get("interval_distance"),
             interval_hours=call.data.get("interval_hours"),
+            interval_months=call.data.get("interval_months"),
         )
 
         fleet[vehicle_id].maintenance_items[item.item_id] = item
         await store.async_save(fleet)
+
+        runtime = hass.data[DOMAIN][entry.entry_id]
+        entity = runtime["entities"].get(vehicle_id)
+        if entity:
+            entity.async_write_ha_state()
 
     hass.services.async_register(
         DOMAIN,
@@ -141,6 +147,7 @@ async def async_setup_entry(
                 vol.Required("name"): str,
                 vol.Exclusive("interval_distance", "interval"): int,
                 vol.Exclusive("interval_hours", "interval"): int,
+                vol.Exclusive("interval_months", "interval"): int,
             }
         ),
     )
@@ -163,6 +170,11 @@ async def async_setup_entry(
 
         fleet[vehicle_id].service_records[record.record_id] = record
         await store.async_save(fleet)
+
+        runtime = hass.data[DOMAIN][entry.entry_id]
+        entity = runtime["entities"].get(vehicle_id)
+        if entity:
+            entity.async_write_ha_state()
 
     hass.services.async_register(
         DOMAIN,
