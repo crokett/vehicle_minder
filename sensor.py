@@ -16,16 +16,13 @@ class VehicleSensor(SensorEntity):
     """A sensor entity representing a single vehicle."""
 
     _attr_has_entity_name = True
+    _attr_name = None # prevent duplicate car name from showing in dashboard and on card
 
     def __init__(self, vehicle: Vehicle) -> None:
         """Initialize the sensor."""
         self._vehicle = vehicle
         self._attr_unique_id = vehicle.vehicle_id
 
-    @property
-    def name(self) -> str:
-        """Return the vehicle's friendly name."""
-        return self._vehicle.name
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -47,6 +44,7 @@ class VehicleSensor(SensorEntity):
         """Return vehicle details as extra state attributes."""
         return {
             "vehicle_id": self._vehicle.vehicle_id,
+            "name": self._vehicle.name,
             "vehicle_type": self._vehicle.vehicle_type,
             "vin": self._vehicle.vin,
             "make": self._vehicle.make,

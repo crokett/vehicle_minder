@@ -536,7 +536,7 @@ class VehicleMinderPanel extends HTMLElement {
       if (!attrs.vehicle_id) continue;
       fleet[attrs.vehicle_id] = {
         vehicle_id: attrs.vehicle_id,
-        name: attrs.friendly_name || state.attributes.friendly_name || entityId,
+        name: attrs.friendly_name || entityId,
         make: attrs.make || "",
         model: attrs.model || "",
         year: attrs.year || "",
@@ -708,8 +708,8 @@ class VehicleMinderPanel extends HTMLElement {
               <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="update_mileage" data-id="${vehicle.vehicle_id}">
                 ${ICON.speedometer} Update Mileage
               </button>
-              <button class="btn btn-danger btn-sm" data-action="open-modal" data-modal="delete_vehicle" data-id="${vehicle.vehicle_id}">
-                ${ICON.trash} Delete Vehicle
+               <button class="btn btn-danger btn-sm" data-action="open-modal" data-modal="delete_vehicle" data-id="${vehicle.vehicle_id}" style="background-color: #dc3545; color: white;">
+              Delete Vehicle
               </button>
             </div>
             <div class="tabs">
