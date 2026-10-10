@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .models import Vehicle
+from typing import Any
 
 
 class VehicleSensor(SensorEntity):
@@ -40,29 +41,47 @@ class VehicleSensor(SensorEntity):
         return self._vehicle.current_mileage
 
     @property
-    def extra_state_attributes(self) -> dict:
-        """Return vehicle details as extra state attributes."""
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return entity specific state attributes."""
+        # 1. Safely retrieve service records from the vehicle object
+        raw_records = getattr(self._vehicle, "service_records", None)
+
+         # 2. Convert raw_records into a clean list
+        if raw_records is None:
+             service_records_list = []
+        elif isinstance(raw_records, dict):
+            service_records_list = [
+            r.to_dict() if hasattr(r, "to_dict") else r
+            for r in raw_records.values()
+        ]
+        elif isinstance(raw_records, list):
+            service_records_list = [
+            r.to_dict() if hasattr(r, "to_dict") else r
+            for r in raw_records
+        ]
+        else:
+            service_records_list = []
+
+    # 3. Return attributes dictionary guaranteed to never return None for collections
         return {
-            "vehicle_id": self._vehicle.vehicle_id,
-            "name": self._vehicle.name,
-            "vehicle_type": self._vehicle.vehicle_type,
-            "vin": self._vehicle.vin,
-            "make": self._vehicle.make,
-            "model": self._vehicle.model,
-            "year": self._vehicle.year,
-            "current_mileage": self._vehicle.current_mileage,
-            "current_hours": self._vehicle.current_hours,
-            "overdue_count": self._vehicle.overdue_count,
-            "maintenance_items": [
-                item.to_dict()
-                for item in self._vehicle.maintenance_items.values()
-            ],
-            "maintenance_status": self._vehicle.maintenance_status(),
-            "service_records": [
-                record.to_dict()
-                for record in self._vehicle.service_records.values()
-            ],
-        }
+        "make": getattr(self._vehicle, "make", ""),
+        "model": getattr(self._vehicle, "model", ""),
+        "year": getattr(self._vehicle, "year", ""),
+        "vehicle_id": getattr(self._vehicle, "vehicle_id", ""),
+        "vehicle_type": getattr(self._vehicle, "vehicle_type", ""),
+        "current_mileage": getattr(self._vehicle, "current_mileage", 0),
+        "vin": getattr(self._vehicle, "vin", ""),
+        "service_records": service_records_list,
+        "maintenance_items": [
+            item.to_dict() if hasattr(item, "to_dict") else item
+            for item in (getattr(self._vehicle, "maintenance_items", {}) or {}).values()
+        ],
+        "maintenance_status": (
+            self._vehicle.maintenance_status()
+            if hasattr(self._vehicle, "maintenance_status") and callable(self._vehicle.maintenance_status)
+            else {}
+        ) or {},
+    }
 
 
 async def async_setup_entry(

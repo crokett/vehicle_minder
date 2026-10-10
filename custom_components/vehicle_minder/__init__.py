@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import voluptuous as vol
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers import config_validation as cv
+from homeassistant.components.frontend import async_register_built_in_panel
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -23,7 +27,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     await async_setup_panel(hass)
     return True
 
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: VehicleMinderConfigEntry,
@@ -31,36 +34,85 @@ async def async_setup_entry(
     """Set up the integration from a config entry."""
 
     store = VehicleMinderStore(hass)
-    fleet = await store.async_load()
+    loaded_fleet = await store.async_load()
+
+    # 1. Fallback for missing/deleted storage file
+    raw_fleet = loaded_fleet if loaded_fleet is not None else {}
+
+    # 2. Rehydrate raw JSON dicts into Vehicle instances
+    fleet = {}
+    for vehicle_id, vehicle_data in raw_fleet.items():
+        if isinstance(vehicle_data, dict):
+            fleet[vehicle_id] = (
+                Vehicle.from_dict(vehicle_data)
+                if hasattr(Vehicle, "from_dict")
+                else vehicle_data
+            )
+        else:
+            fleet[vehicle_id] = vehicle_data
 
     entry.runtime_data = fleet
 
+    # 3. Register static HTTP path so the browser can load JS assets
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                url_path="/vehicle_minder_static",
+                path=hass.config.path("custom_components/vehicle_minder/frontend"),
+                cache_headers=False,
+            )
+        ]
+    )
+
+
+    # 4. Forward entity setups to platforms
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
 
-    # --- Service: add_vehicle ---
-    async def handle_add_vehicle(call) -> None:
+   
+   # --- Service: add_vehicle ---
+    async def handle_add_vehicle(call: ServiceCall) -> None:
         """Add a new vehicle to the fleet."""
         from .sensor import VehicleSensor
 
+        data = call.data
         vehicle = Vehicle(
-            make=call.data["make"],
-            model=call.data["model"],
-            year=call.data["year"],
-            name=call.data["name"],
-            vehicle_type=call.data["vehicle_type"],
-            vin=call.data.get("vin"),
-            current_mileage=call.data["current_mileage"],
+            make=data["make"],
+            model=data["model"],
+            year=data["year"],
+            name=data["name"],
+            vehicle_type=data.get("vehicle_type", "car"),
+            vin=data.get("vin"),
+            current_mileage=data["current_mileage"],
         )
 
+        # 1. Update in-memory fleet dictionary
         fleet[vehicle.vehicle_id] = vehicle
-        await store.async_save(fleet)
 
+        # 2. Serialize fleet to raw dicts for JSON storage
+        serializable_fleet = {}
+        for v_id, v in fleet.items():
+            if isinstance(v, dict):
+                # Already a dict from JSON load
+                serializable_fleet[v_id] = v
+            elif hasattr(v, "to_dict"):
+                # Vehicle object with to_dict method
+                serializable_fleet[v_id] = v.to_dict()
+            else:
+                # Fallback object serialization
+                serializable_fleet[v_id] = v.__dict__
+
+        # 3. Save serialized dict to disk
+        await store.async_save(serializable_fleet)
+
+        # 4. Dynamically add the new sensor entity
         runtime = hass.data[DOMAIN][entry.entry_id]
-
         entity = VehicleSensor(vehicle)
 
-        runtime["entities"][vehicle.vehicle_id] = entity
-        runtime["add_entities"]([entity])
+        if isinstance(runtime, dict):
+            if "entities" in runtime:
+                runtime["entities"][vehicle.vehicle_id] = entity
+            if "add_entities" in runtime:
+                runtime["add_entities"]([entity])
 
     hass.services.async_register(
         DOMAIN,
@@ -68,12 +120,12 @@ async def async_setup_entry(
         handle_add_vehicle,
         schema=vol.Schema(
             {
-                vol.Required("make"): str,
-                vol.Required("model"): str,
-                vol.Required("year"): int,
-                vol.Required("name"): str,
-                vol.Required("vehicle_type"): str,
-                vol.Optional("vin"): str,
+                vol.Required("make"): cv.string,
+                vol.Required("model"): cv.string,
+                vol.Required("year"): vol.All(vol.Coerce(int), vol.Range(min=1900)),
+                vol.Required("name"): cv.string,
+                vol.Optional("vehicle_type", default="car"): cv.string,
+                vol.Optional("vin"): cv.string,
                 vol.Required("current_mileage"): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=0),

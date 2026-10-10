@@ -98,6 +98,13 @@ class Vehicle:
         maintenance_items: dict[str, MaintenanceItem] | None = None,
         service_records: dict[str, ServiceRecord] | None = None,
     ) -> None:
+        # Assign an empty dict if None was passed:
+        self.service_records: dict[str, ServiceRecord] = (
+            service_records if service_records is not None else {}
+        )
+        self.maintenance_items: dict[str, MaintenanceItem] = (
+            maintenance_items if maintenance_items is not None else {}
+        )
         """Initialize a vehicle."""
         self.vehicle_id = vehicle_id or f"vehicle_{uuid.uuid4().hex[:8]}"
         self.name = name
