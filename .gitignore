@@ -1,2 +1,5 @@
-__pycache__
-custom_components/vehicle_minder/__pycache__
+#python cache 
+__pycache__/
+
+# compiled python files
+*.py[cod]

@@ -16,15 +16,18 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
     """Register static path and custom panel for Vehicle Minder."""
 
     # 1. Register static path pointing directly to local frontend directory
-    await hass.http.async_register_static_paths(
-        [
-            frontend.StaticPathConfig(
-                url_path="/vehicle_minder_static",
-                path=str(FRONTEND_DIR),
-                cache_headers=False,
-            )
-        ]
-    )
+   # Guard static path registration to avoid aiohttp duplicate route errors
+    if "vehicle_minder_static" not in hass.data.get("http_registered_static_paths", set()):
+        await hass.http.async_register_static_paths(
+            [
+                frontend.StaticPathConfig(
+                    url_path="/vehicle_minder_static",
+                    path=str(FRONTEND_DIR),
+                    cache_headers=False,
+                )
+            ]
+        )
+        hass.data.setdefault("http_registered_static_paths", set()).add("vehicle_minder_static")
 
     # 2. Register built-in custom panel using module_url
     if DOMAIN not in hass.data.get("frontend_panels", {}):

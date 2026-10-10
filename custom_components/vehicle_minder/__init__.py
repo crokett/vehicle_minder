@@ -1,80 +1,64 @@
-"""The vehicle_minder integration."""
+"""Set up Vehicle Minder integration from a config entry."""
 
 from __future__ import annotations
 
-import voluptuous as vol
+import logging
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
-from homeassistant.components.frontend import async_register_built_in_panel
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+import voluptuous as vol
 
-from .const import DOMAIN
-from .models import MaintenanceItem, ServiceRecord, Vehicle
+from .const import DOMAIN, PLATFORMS
+from .models import Vehicle, MaintenanceItem, ServiceRecord
 from .panel import async_setup_panel
 from .storage import VehicleMinderStore
 
-_PLATFORMS: list[Platform] = [Platform.SENSOR]
+_LOGGER = logging.getLogger(__name__)
 
-type VehicleMinderConfigEntry = ConfigEntry[dict[str, Vehicle]]
-
-
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the Vehicle Minder integration (panel registration)."""
-    await async_setup_panel(hass)
-    return True
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: VehicleMinderConfigEntry,
+    entry: ConfigEntry,
 ) -> bool:
     """Set up the integration from a config entry."""
 
+    # Register static frontend panel
+    await async_setup_panel(hass)
+
+    # Load storage
     store = VehicleMinderStore(hass)
     loaded_fleet = await store.async_load()
-
-    # 1. Fallback for missing/deleted storage file
     raw_fleet = loaded_fleet if loaded_fleet is not None else {}
 
-    # 2. Rehydrate raw JSON dicts into Vehicle instances
-    fleet = {}
+   # Rehydrate raw JSON dicts into Vehicle instances
+    fleet: dict[str, Vehicle] = {}
     for vehicle_id, vehicle_data in raw_fleet.items():
         if isinstance(vehicle_data, dict):
-            fleet[vehicle_id] = (
-                Vehicle.from_dict(vehicle_data)
-                if hasattr(Vehicle, "from_dict")
-                else vehicle_data
-            )
+            if hasattr(Vehicle, "from_dict") and callable(getattr(Vehicle, "from_dict")):
+                fleet[vehicle_id] = Vehicle.from_dict(vehicle_data)
+            else:
+                fleet[vehicle_id] = Vehicle(**vehicle_data)
         else:
             fleet[vehicle_id] = vehicle_data
 
     entry.runtime_data = fleet
 
-    # 3. Register static HTTP path so the browser can load JS assets
-    await hass.http.async_register_static_paths(
-        [
-            StaticPathConfig(
-                url_path="/vehicle_minder_static",
-                path=hass.config.path("custom_components/vehicle_minder/frontend"),
-                cache_headers=False,
-            )
-        ]
-    )
+   # Initialize domain data store for entities
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = {
+        "fleet": fleet,
+        "entities": {},
+    }
 
+    # Forward entity setups to platforms
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # 4. Forward entity setups to platforms
-    await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
-
-   
-   # --- Service: add_vehicle ---
+    # --- Service: add_vehicle ---
     async def handle_add_vehicle(call: ServiceCall) -> None:
         """Add a new vehicle to the fleet."""
-        from .sensor import VehicleSensor
-
         data = call.data
+        _LOGGER.info("Adding vehicle via service: %s", data)
+
         vehicle = Vehicle(
             make=data["make"],
             model=data["model"],
@@ -85,34 +69,18 @@ async def async_setup_entry(
             current_mileage=data["current_mileage"],
         )
 
-        # 1. Update in-memory fleet dictionary
         fleet[vehicle.vehicle_id] = vehicle
 
-        # 2. Serialize fleet to raw dicts for JSON storage
-        serializable_fleet = {}
-        for v_id, v in fleet.items():
-            if isinstance(v, dict):
-                # Already a dict from JSON load
-                serializable_fleet[v_id] = v
-            elif hasattr(v, "to_dict"):
-                # Vehicle object with to_dict method
-                serializable_fleet[v_id] = v.to_dict()
-            else:
-                # Fallback object serialization
-                serializable_fleet[v_id] = v.__dict__
+       
+        await store.async_save(fleet)
 
-        # 3. Save serialized dict to disk
-        await store.async_save(serializable_fleet)
-
-        # 4. Dynamically add the new sensor entity
+        from .sensor import VehicleSensor
         runtime = hass.data[DOMAIN][entry.entry_id]
         entity = VehicleSensor(vehicle)
+        runtime["entities"][vehicle.vehicle_id] = entity
 
-        if isinstance(runtime, dict):
-            if "entities" in runtime:
-                runtime["entities"][vehicle.vehicle_id] = entity
-            if "add_entities" in runtime:
-                runtime["add_entities"]([entity])
+        if "add_entities" in runtime:
+            runtime["add_entities"]([entity])
 
     hass.services.async_register(
         DOMAIN,
@@ -129,15 +97,15 @@ async def async_setup_entry(
                 vol.Required("current_mileage"): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=0),
-                )
+                ),
             }
         ),
     )
+
     # --- Service: set_mileage ---
-    async def handle_set_mileage(call) -> None:
+    async def handle_set_mileage(call: ServiceCall) -> None:
         """Set the current mileage for a vehicle."""
         vehicle_id = call.data["vehicle_id"]
-
         if vehicle_id not in fleet:
             raise ValueError(f"Vehicle '{vehicle_id}' not found")
 
@@ -146,7 +114,6 @@ async def async_setup_entry(
 
         runtime = hass.data[DOMAIN][entry.entry_id]
         entity = runtime["entities"].get(vehicle_id)
-
         if entity:
             entity.async_write_ha_state()
 
@@ -164,13 +131,11 @@ async def async_setup_entry(
             }
         ),
     )
-    # --- Service: set_mileage ---
 
     # --- Service: add_maintenance_item ---
-    async def handle_add_maintenance_item(call) -> None:
+    async def handle_add_maintenance_item(call: ServiceCall) -> None:
         """Add a maintenance item to a specific vehicle."""
         vehicle_id = call.data["vehicle_id"]
-
         if vehicle_id not in fleet:
             raise ValueError(f"Vehicle '{vehicle_id}' not found")
 
@@ -205,10 +170,9 @@ async def async_setup_entry(
     )
 
     # --- Service: add_service_record ---
-    async def handle_add_service_record(call) -> None:
+    async def handle_add_service_record(call: ServiceCall) -> None:
         """Add a completed service record to a specific vehicle."""
         vehicle_id = call.data["vehicle_id"]
-
         if vehicle_id not in fleet:
             raise ValueError(f"Vehicle '{vehicle_id}' not found")
 
@@ -251,10 +215,9 @@ async def async_setup_entry(
     )
 
     # --- Service: delete_vehicle ---
-    async def handle_delete_vehicle(call) -> None:
+    async def handle_delete_vehicle(call: ServiceCall) -> None:
         """Remove a vehicle and all its data from the fleet."""
         vehicle_id = call.data["vehicle_id"]
-
         if vehicle_id not in fleet:
             raise ValueError(f"Vehicle '{vehicle_id}' not found")
 
