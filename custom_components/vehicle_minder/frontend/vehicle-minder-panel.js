@@ -622,7 +622,7 @@ class VehicleMinderPanel extends HTMLElement {
   }
 
   _renderVehicleRow(v) {
-    const sub = [v.year, v.make, v.model].filter(Boolean).join(" ");
+    const sub = [v.year, v.make, v.model, v.vehicle_type].filter(Boolean).join(" ");
     const mileage = `${fmt(v.current_mileage)} mi`;
     const maintCount = Object.keys(v.maintenance_items).length;
     const svcCount = Object.keys(v.service_records).length;
@@ -867,16 +867,44 @@ class VehicleMinderPanel extends HTMLElement {
           <label class="form-label">Year *</label>
           <input class="form-input" id="vm-year" type="number" placeholder="${new Date().getFullYear()}" min="1900" max="${new Date().getFullYear() + 2}">
         </div>
-        <div class="form-group">
-          <label class="form-label">Current Mileage</label>
-          <input class="form-input" id="vm-mileage" type="number" placeholder="0" min="0">
         </div>
-      </div>
+        <div class="form-group">
+          <label class="form-label">Enter current mileage or hours</label>
+          <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Current Mileage</label>
+              <input
+               class="form-input"
+              id="vm-mileage"
+              type="number"
+              placeholder="0"
+             min="0"
+           >
+          </div>
+          <div class="form-group">
+            <label class="form-label">Current Hours</label>
+              <input
+              class="form-input"
+              id="vm-hours"
+              type="number"
+              placeholder="0"
+              min="0"
+              >
+          </div>
+       </div>
+    </div>
       <div class="form-group">
         <label class="form-label">VIN (optional)</label>
         <input class="form-input" id="vm-vin" placeholder="17-character VIN" maxlength="17">
       </div>
-      <input type="hidden" id="vm-vehicle-type" value="car">
+     <div class="form-group">
+        <label class="form-label">Vehicle Type *</label>
+         <input
+          class="form-input"
+          id="vm-vehicle-type"
+           placeholder="e.g. car, mower, boat"
+        >
+      </div>
     `, "Add Vehicle");
   }
 
@@ -1070,12 +1098,15 @@ class VehicleMinderPanel extends HTMLElement {
           const model = val("vm-model");
           const year = parseInt(val("vm-year"), 10);
           const mileage = parseInt(val("vm-mileage") || "0", 10);
+          const hours = parseFloat(val("vm-hours") || "0", 10);
           const vin = val("vm-vin");
+          const vehicleType = val("vm-vehicle-type");
           if (!name || !make || !model || !year) { alert("Please fill in all required fields."); return; }
           this._callService("add_vehicle", {
             name, make, model, year,
-            vehicle_type: "car",
             current_mileage: mileage,
+            current_hours: hours,
+            vehicle_type: vehicleType,
             ...(vin ? { vin } : {}),
           });
           break;
