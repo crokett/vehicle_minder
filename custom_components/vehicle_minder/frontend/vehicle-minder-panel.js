@@ -79,7 +79,6 @@ const STYLES = `
     width: 32px;
     height: 32px;
     object-fit: contain;
-    filter: brightness(0) invert(1);
   }
   .toolbar h1 {
     flex: 1;
@@ -576,7 +575,10 @@ class VehicleMinderPanel extends HTMLElement {
   _renderToolbar() {
     return `
       <div class="toolbar">
-        <img class="logo" src="/local/vehicle-minder/icon.png" alt="VM" onerror="this.style.display='none'">
+
+        <img class="logo" src="/vehicle_minder_static/icon.png" alt="VM">
+
+      
         <h1>Vehicle Minder</h1>
         <button class="btn btn-primary" data-action="open-modal" data-modal="add_vehicle">
           ${ICON.plus} Add Vehicle
