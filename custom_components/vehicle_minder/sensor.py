@@ -69,6 +69,7 @@ class VehicleSensor(SensorEntity):
         "year": getattr(self._vehicle, "year", ""),
         "vehicle_id": getattr(self._vehicle, "vehicle_id", ""),
         "vehicle_type": getattr(self._vehicle, "vehicle_type", ""),
+        "use_hours": getattr(self._vehicle, "use_hours", False),
         "current_mileage": getattr(self._vehicle, "current_mileage", 0),
         "vin": getattr(self._vehicle, "vin", ""),
         "service_records": service_records_list,
