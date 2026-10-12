@@ -12,7 +12,7 @@ automobiles.  You can also use it to track ATVs, tractors, mowers and other offr
 
 ## Features
 ### Vehicle
-Each vehicle in your fleet is represented as a separate row in the custom Fleet Dashboard. Each vehicle maintains its own listing of maintenance items and service records. Overdue maintenance items are flagged as overdue.  
+Each vehicle in your fleet is represented as a separate row in the custom Fleet Dashboard. Each vehicle maintains its own listing of [maintenance items](https://github.com/crokett/vehicle_minder/blob/main/README.md#maintenance-items) and [service records](https://github.com/crokett/vehicle_minder/blob/main/README.md#service-records). Overdue maintenance items are flagged as overdue.  
 
 ### Service Records
 Service records are how you track maintenance performed on your vehicles.  Service records are tied to a maintenance item
