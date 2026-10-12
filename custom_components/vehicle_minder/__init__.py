@@ -66,7 +66,9 @@ async def async_setup_entry(
             name=data["name"],
             vehicle_type=data.get("vehicle_type", "car"),
             vin=data.get("vin"),
-            current_mileage=data["current_mileage"],
+            use_hours = call.data.get("use_hours", False),
+            current_mileage=data.get("current_mileage", 0),
+            current_hours=data.get("current_hours", 0.0),
         )
 
         fleet[vehicle.vehicle_id] = vehicle
@@ -94,10 +96,52 @@ async def async_setup_entry(
                 vol.Required("name"): cv.string,
                 vol.Optional("vehicle_type", default="car"): cv.string,
                 vol.Optional("vin"): cv.string,
-                vol.Required("current_mileage"): vol.All(
+                vol.Optional("use_hours", default=False): cv.boolean,  
+               # Mutually exclusive metrics: user can provide mileage OR hours, but not both
+                vol.Exclusive("current_mileage", "usage_metric"): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=0),
                 ),
+                vol.Exclusive("current_hours", "usage_metric"): vol.All(
+                    vol.Coerce(float),
+                    vol.Range(min=0.0),
+                ),
+            }
+        ),
+    )
+
+    # --- Sservice: set_hours ---
+    async def handle_set_hours(call: ServiceCall) -> None:
+        """Update the current operating hours of a vehicle/equipment."""
+        vehicle_id = call.data["vehicle_id"]
+        new_hours = call.data["current_hours"]
+
+        if vehicle_id not in fleet:
+            _LOGGER.error("Vehicle ID %s not found in fleet", vehicle_id)
+            return
+
+        vehicle = fleet[vehicle_id]
+        vehicle.current_hours = new_hours
+        
+        # Save changes to persistence store
+        await store.async_save(fleet)
+
+        # Update the live sensor entity state if it exists
+        runtime = hass.data[DOMAIN][entry.entry_id]
+        if "entities" in runtime and vehicle_id in runtime["entities"]:
+            entity = runtime["entities"][vehicle_id]
+            entity.async_write_ha_state()
+
+        _LOGGER.info("Updated hours for %s to %s hrs", vehicle.name, new_hours)
+
+    hass.services.async_register(
+        DOMAIN,
+        "set_hours",
+        handle_set_hours,
+        schema=vol.Schema(
+            {
+                vol.Required("vehicle_id"): cv.string,
+                vol.Required("current_hours"): vol.All(vol.Coerce(float), vol.Range(min=0.0)),
             }
         ),
     )

@@ -507,9 +507,11 @@ const ICON = {
 // ---------------------------------------------------------------------------
 
 class VehicleMinderPanel extends HTMLElement {
+
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this._useHours = false;
     this._hass = null;
     this._view = "fleet"; // "fleet" | "detail"
     this._selectedId = null;
@@ -532,6 +534,8 @@ class VehicleMinderPanel extends HTMLElement {
     for (const [entityId, state] of Object.entries(this._hass.states)) {
       if (!entityId.startsWith(`sensor.${DOMAIN}_`) && !entityId.startsWith(`sensor.`)) continue;
       const attrs = state.attributes || {};
+     //  const isHoursTracked = Boolean(attrs.use_hours);
+
       if (!attrs.vehicle_id) continue;
       fleet[attrs.vehicle_id] = {
         vehicle_id: attrs.vehicle_id,
@@ -539,10 +543,11 @@ class VehicleMinderPanel extends HTMLElement {
         make: attrs.make || "",
         model: attrs.model || "",
         year: attrs.year || "",
-        vehicle_type: attrs.vehicle_type || "car",
+        vehicle_type: attrs.vehicle_type || "Car",
         vin: attrs.vin || null,
         current_mileage: Number(state.state) || attrs.current_mileage || 0,
         current_hours: attrs.current_hours || 0,
+        use_hours: Boolean(state.attributes.use_hours),
         overdue_count: attrs.overdue_count || 0,
         maintenance_status: attrs.maintenance_status || [],
         maintenance_items: this._indexById(attrs.maintenance_items || [], "item_id"),
@@ -623,28 +628,29 @@ class VehicleMinderPanel extends HTMLElement {
       </div>`;
   }
 
-  _renderVehicleRow(v) {
+_renderVehicleRow(v) {
     const sub = [v.year, v.make, v.model, v.vehicle_type].filter(Boolean).join(" ");
-    const mileage = `${fmt(v.current_mileage)} mi`;
-    const maintCount = Object.keys(v.maintenance_items).length;
-    const svcCount = Object.keys(v.service_records).length;
-    const overdueCount = v.overdue_count || 0;
-    const overdueWarning = overdueCount > 0
-      ? `<span class="overdue-badge" title="${overdueCount} maintenance item${overdueCount !== 1 ? "s" : ""} overdue">
-           ${ICON.warning} ${overdueCount} overdue
-         </span>`
-      : "";
+    
+    // PURE BOOLEAN CHECK ONLY
+    const usesHours = v.use_hours === true;
+    
+    const metricValue = usesHours ? `${v.current_hours || 0} hrs` : `${fmt(v.current_mileage || 0)} mi`;
+    const modalTarget = usesHours ? "update_hours" : "update_mileage";
+    const titleText = usesHours ? "Update hours" : "Update mileage";
+    
+    const maintCount = Object.keys(v.maintenance_items || {}).length;
+    const svcCount = Object.keys(v.service_records || {}).length;
+    const overdueWarning = (v.overdue_count || 0) > 0;
 
     return `
-      <div class="vehicle-row" data-action="select-vehicle" data-id="${v.vehicle_id}">
-        <div class="vehicle-icon${overdueCount > 0 ? " vehicle-icon--alert" : ""}">${ICON.car}</div>
+      <div class="vehicle-row${overdueWarning ? " overdue" : ""}" data-action="select-vehicle" data-id="${v.vehicle_id}">
         <div class="vehicle-info">
-          <div class="vehicle-name">${this._escape(v.name)} ${overdueWarning}</div>
-          <div class="vehicle-sub">${this._escape(sub)}${v.vin ? ` · ${v.vin}` : ""}</div>
+          <div class="vehicle-name">${this._escape(v.name)}</div>
+          <div class="vehicle-sub">${this._escape(sub)}</div>
         </div>
         <div class="vehicle-actions" data-stop-propagation="1">
-          <span class="vehicle-badge" data-action="open-modal" data-modal="update_mileage" data-id="${v.vehicle_id}" title="Update mileage">
-            ${ICON.speedometer} ${mileage}
+          <span class="vehicle-badge" data-action="open-modal" data-modal="${modalTarget}" data-id="${v.vehicle_id}" title="${titleText}">
+            ${ICON.speedometer} ${metricValue}
           </span>
           <span class="vehicle-badge" data-action="open-modal" data-modal="add_maintenance" data-id="${v.vehicle_id}" title="Add maintenance item">
             ${ICON.wrench} ${maintCount} item${maintCount !== 1 ? "s" : ""}
@@ -653,12 +659,13 @@ class VehicleMinderPanel extends HTMLElement {
             ${ICON.history} ${svcCount} record${svcCount !== 1 ? "s" : ""}
           </span>
         </div>
-      </div>`;
+      </div>
+    `;
   }
 
   // ── Detail view ────────────────────────────────────────────────────────────
 
-  _renderDetailView() {
+_renderDetailView() {
     const vehicle = this._fleet[this._selectedId];
     if (!vehicle) return this._renderFleetView();
 
@@ -680,6 +687,14 @@ class VehicleMinderPanel extends HTMLElement {
         : this._renderMaintenanceTab(vehicle);
 
     const sub = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
+    
+    // STRICT BOOLEAN CHECK: Only true if use_hours is explicitly true
+       const usesHours = !!vehicle.use_hours;
+    
+      const metricDisplay = usesHours 
+         ? `${vehicle.current_hours || 0} hrs` 
+          : `${fmt(vehicle.current_mileage || 0)} mi`;
+
     return `
       <div class="detail-view">
         <div class="sidebar">
@@ -699,7 +714,7 @@ class VehicleMinderPanel extends HTMLElement {
         <div class="main-pane">
           <div class="main-header">
             <div class="main-title">${this._escape(vehicle.name)}</div>
-            <div class="main-sub">${this._escape(sub)}${vehicle.vin ? ` · VIN: ${vehicle.vin}` : ""} · ${fmt(vehicle.current_mileage)} mi</div>
+            <div class="main-sub">${this._escape(sub)}${vehicle.vin ? ` · VIN: ${vehicle.vin}` : ""} · ${metricDisplay}</div>
             <div class="main-actions">
               <button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="add_service" data-id="${vehicle.vehicle_id}">
                 ${ICON.plus} Add Service Record
@@ -707,11 +722,20 @@ class VehicleMinderPanel extends HTMLElement {
               <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="add_maintenance" data-id="${vehicle.vehicle_id}">
                 ${ICON.plus} Add Maintenance Item
               </button>
-              <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="update_mileage" data-id="${vehicle.vehicle_id}">
-                ${ICON.speedometer} Update Mileage
-              </button>
-               <button class="btn btn-danger btn-sm" data-action="open-modal" data-modal="delete_vehicle" data-id="${vehicle.vehicle_id}" style="background-color: #dc3545; color: white;">
-              Delete Vehicle
+              
+              <!-- Conditional Update Button -->
+              ${usesHours ? `
+                <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="update_hours" data-id="${vehicle.vehicle_id}">
+                  ${ICON.speedometer || ''} Update Hours
+                </button>
+              ` : `
+                <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="update_mileage" data-id="${vehicle.vehicle_id}">
+                  ${ICON.speedometer || ''} Update Mileage
+                </button>
+              `}
+
+              <button class="btn btn-danger btn-sm" data-action="open-modal" data-modal="delete_vehicle" data-id="${vehicle.vehicle_id}" style="background-color: #dc3545; color: white;">
+                Delete Vehicle
               </button>
             </div>
             <div class="tabs">
@@ -723,7 +747,6 @@ class VehicleMinderPanel extends HTMLElement {
         </div>
       </div>`;
   }
-
   _renderServiceTab(vehicle) {
     const records = Object.values(vehicle.service_records).sort(
       (a, b) => new Date(b.date) - new Date(a.date)
@@ -826,6 +849,7 @@ class VehicleMinderPanel extends HTMLElement {
       case "add_service":     return this._modalAddService(vehicleId);
       case "add_maintenance": return this._modalAddMaintenance(vehicleId);
       case "update_mileage":  return this._modalUpdateMileage(vehicleId);
+      case "update_hours":    return this._modalUpdateHours(vehicleId);
       case "delete_vehicle":  return this._modalDeleteVehicle(vehicleId);
       default: return "";
     }
@@ -833,6 +857,7 @@ class VehicleMinderPanel extends HTMLElement {
 
   _modalWrap(title, body, submitLabel = "Save") {
     return `
+    
       <div class="modal-overlay" data-action="close-modal-overlay">
         <div class="modal">
           <div class="modal-header">
@@ -848,8 +873,8 @@ class VehicleMinderPanel extends HTMLElement {
       </div>`;
   }
 
-  _modalAddVehicle() {
-    return this._modalWrap("Add Vehicle", `
+_modalAddVehicle() {
+    return this._modalWrap(`
       <div class="form-group">
         <label class="form-label">Display Name *</label>
         <input class="form-input" id="vm-name" placeholder="e.g. Family SUV">
@@ -869,43 +894,40 @@ class VehicleMinderPanel extends HTMLElement {
           <label class="form-label">Year *</label>
           <input class="form-input" id="vm-year" type="number" placeholder="${new Date().getFullYear()}" min="1900" max="${new Date().getFullYear() + 2}">
         </div>
+      </div>
+
+      <!-- Metric Type Selection Toggle -->
+      <div class="form-group" style="margin: 12px 0;">
+        <label class="form-label">Tracking Metric *</label>
+        <div class="metric-toggle-group" style="display: flex; gap: 20px; align-items: center; margin-top: 6px;">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="modalMetricType" value="mileage" checked class="modal-metric-radio" /> Mileage (mi)
+          </label>
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="modalMetricType" value="hours" class="modal-metric-radio" /> Hours (hrs)
+          </label>
         </div>
-        <div class="form-group">
-          <label class="form-label">Enter current mileage or hours</label>
-          <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Current Mileage</label>
-              <input
-               class="form-input"
-              id="vm-mileage"
-              type="number"
-              placeholder="0"
-             min="0"
-           >
-          </div>
-          <div class="form-group">
-            <label class="form-label">Current Hours</label>
-              <input
-              class="form-input"
-              id="vm-hours"
-              type="number"
-              placeholder="0"
-              min="0"
-              >
-          </div>
-       </div>
-    </div>
+      </div>
+
+      <!-- Mileage Field (Visible by default) -->
+      <div class="form-group" id="modal-mileage-wrap">
+        <label class="form-label">Current Mileage</label>
+        <input class="form-input" id="vm-mileage" type="number" placeholder="0" min="0">
+      </div>
+
+      <!-- Hours Field (Hidden by default) -->
+      <div class="form-group" id="modal-hours-wrap" style="display: none;">
+        <label class="form-label">Current Hours</label>
+        <input class="form-input" id="vm-hours" type="number" step="0.1" placeholder="0" min="0">
+      </div>
+
       <div class="form-group">
         <label class="form-label">VIN (optional)</label>
         <input class="form-input" id="vm-vin" placeholder="17-character VIN" maxlength="17">
       </div>
-     <div class="form-group">
+      <div class="form-group">
         <label class="form-label">Vehicle Type *</label>
-         <input
-          class="form-input"
-          id="vm-vehicle-type"
-           placeholder="e.g. car, mower, boat"
-        >
+        <input class="form-input" id="vm-vehicle-type" placeholder="e.g. car, mower, boat" value="car">
       </div>
     `, "Add Vehicle");
   }
@@ -982,6 +1004,23 @@ class VehicleMinderPanel extends HTMLElement {
     `, "Add Item");
   }
 
+
+_modalUpdateHours(vehicleId) {
+    const vehicle = this._fleet[vehicleId];
+    const currentHours = vehicle ? (vehicle.current_hours || 0) : 0;
+    
+    return this._modalWrap("Update Hours", `
+      <div class="form-group">
+        <label class="form-label">Current Operating Hours *</label>
+        <input class="form-input" id="vm-new-hours" type="number" step="0.1" value="${currentHours}" min="0">
+      </div>
+      <p style="font-size:.83rem;color:var(--secondary-text-color);margin:0">
+        Current recorded hours: <strong>${currentHours} hrs</strong>
+      </p>
+      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
+    `, "Update");
+  }
+
   _modalUpdateMileage(vehicleId) {
     const vehicle = this._fleet[vehicleId];
     const current = vehicle ? vehicle.current_mileage : 0;
@@ -1016,6 +1055,20 @@ class VehicleMinderPanel extends HTMLElement {
 
   _bindEvents() {
     const root = this.shadowRoot;
+    // Listen for changes on the metric radio buttons to toggle visibility
+    root.addEventListener("change", (e) => {
+      if (e.target.classList.contains("modal-metric-radio")) {
+        const isHours = e.target.value === "hours";
+        this._useHours = isHours; // Update instance state
+        
+        const mileageWrap = root.getElementById("modal-mileage-wrap");
+        const hoursWrap = root.getElementById("modal-hours-wrap");
+        if (mileageWrap && hoursWrap) {
+          mileageWrap.style.display = isHours ? "none" : "block";
+          hoursWrap.style.display = isHours ? "block" : "none";
+        }
+      }
+    });
 
     root.addEventListener("click", (e) => {
       const el = e.target.closest("[data-action]");
@@ -1099,20 +1152,32 @@ class VehicleMinderPanel extends HTMLElement {
           const make = val("vm-make");
           const model = val("vm-model");
           const year = parseInt(val("vm-year"), 10);
-          const mileage = parseInt(val("vm-mileage") || "0", 10);
-          const hours = parseFloat(val("vm-hours") || "0", 10);
           const vin = val("vm-vin");
           const vehicleType = val("vm-vehicle-type");
           if (!name || !make || !model || !year) { alert("Please fill in all required fields."); return; }
+          
+          // Directly inspect the radio button state at submission time
+          const selectedRadio = root.querySelector('input[name="modalMetricType"]:checked');
+          const useHours = selectedRadio ? selectedRadio.value === "hours" : false;
+
+          const mileage = root.getElementById("vm-mileage")?.value;
+          const hours = root.getElementById("vm-hours")?.value;
+
+        // Construct exclusive payload property strictly using our clean boolean
+        const usageMetric = useHours 
+         ? { current_hours: parseFloat(hours || "0") } 
+          : { current_mileage: parseInt(mileage || "0", 10) };
+         
           this._callService("add_vehicle", {
             name, make, model, year,
-            current_mileage: mileage,
-            current_hours: hours,
             vehicle_type: vehicleType,
+            current_hours: useHours,
             ...(vin ? { vin } : {}),
+            ...usageMetric,
           });
           break;
         }
+        
         case "add_service": {
           const vehicle_id = val("vm-vehicle-id");
           const date = val("vm-date");
@@ -1147,6 +1212,15 @@ class VehicleMinderPanel extends HTMLElement {
           this._callService("add_maintenance_item", serviceData);
           break;
         }
+
+        case "update_hours": {
+          const vehicle_id = val("vm-vehicle-id");
+          const hours = parseFloat(val("vm-new-hours"), 10);
+          if (isNaN(hours)) { alert("Please enter a valid number of hours."); return; }
+          this._callService("set_hours", { vehicle_id, current_hours: hours});
+          break;
+        }
+
         case "update_mileage": {
           const vehicle_id = val("vm-vehicle-id");
           const mileage = parseInt(val("vm-new-mileage"), 10);

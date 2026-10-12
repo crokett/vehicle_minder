@@ -91,12 +91,14 @@ class Vehicle:
         year: int,
         name: str,
         vehicle_type: str,
+        use_hours: bool = False,
         vehicle_id: str | None = None,
         vin: str | None = None,
         current_mileage: int = 0,
         current_hours: float = 0,
         maintenance_items: dict[str, MaintenanceItem] | None = None,
         service_records: dict[str, ServiceRecord] | None = None,
+        
     ) -> None:
         # Assign an empty dict if None was passed:
         self.service_records: dict[str, ServiceRecord] = (
@@ -113,6 +115,7 @@ class Vehicle:
         self.make = make
         self.model = model
         self.year = year
+        self.use_hours = use_hours
         self.current_mileage = current_mileage
         self.current_hours = current_hours
         self.maintenance_items = maintenance_items or {}
