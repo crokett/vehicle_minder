@@ -933,6 +933,7 @@ _modalAddVehicle() {
   }
 
   _modalAddService(vehicleId) {
+    
     const vehicle = this._fleet[vehicleId];
     // Build options from existing maintenance items for convenience
     const items = vehicle ? Object.values(vehicle.maintenance_items) : [];
@@ -947,9 +948,9 @@ _modalAddVehicle() {
           <label class="form-label">Date *</label>
           <input class="form-input" id="vm-date" type="date" value="${new Date().toISOString().slice(0, 10)}">
         </div>
-        <div class="form-group">
-          <label class="form-label">Mileage at Service *</label>
-          <input class="form-input" id="vm-svc-mileage" type="number" placeholder="${vehicle ? vehicle.current_mileage : 0}" min="0">
+       <div class="form-group">
+          <label class="form-label">${vehicle && vehicle.use_hours ? "Hours at Service *" : "Mileage at Service *"}</label>
+          <input class="form-input" id="vm-svc-mileage" type="number" placeholder="${vehicle ? (vehicle.use_hours ? vehicle.current_hours : vehicle.current_mileage) : 0}" min="0">
         </div>
       </div>
       <div class="form-group">
