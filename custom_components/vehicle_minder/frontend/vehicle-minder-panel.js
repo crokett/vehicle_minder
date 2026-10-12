@@ -1171,7 +1171,7 @@ _modalUpdateHours(vehicleId) {
           this._callService("add_vehicle", {
             name, make, model, year,
             vehicle_type: vehicleType,
-            current_hours: useHours,
+            use_hours: useHours,
             ...(vin ? { vin } : {}),
             ...usageMetric,
           });

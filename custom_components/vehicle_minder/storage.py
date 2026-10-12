@@ -60,6 +60,7 @@ class VehicleMinderStore:
                 make=vehicle_data["make"],
                 model=vehicle_data["model"],
                 year=vehicle_data["year"],
+                use_hours=vehicle_data.get("use_hours", False),
                 current_mileage=vehicle_data.get("current_mileage", 0),
                 current_hours=vehicle_data.get("current_hours", 0),
                 maintenance_items=maintenance_items,

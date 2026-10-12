@@ -224,6 +224,7 @@ class Vehicle:
             "make": self.make,
             "model": self.model,
             "year": self.year,
+            "use_hours": self.use_hours,
             "current_mileage": self.current_mileage,
             "current_hours": self.current_hours,
             "maintenance_items": {
