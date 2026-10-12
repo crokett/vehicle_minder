@@ -8,6 +8,13 @@
 
 ## Overview
 Vehicle Minder is an integration for Home Assistant that lets you track your vehicle fleet and track maintenance on your vehicles.  It can be used to track cars, trucks, motorcycles and other 
-automobiles.  You can also use it to track ATVs, tractors, mowers and other offroad equipment.
+automobiles.  You can also use it to track ATVs, tractors, mowers and other offroad equipment.  
 
 ## Features
+### Vehicle
+Each vehicle in your fleet is represented as a separate row in the custom Fleet Dashboard. Each vehicle maintains its own listing of maintenance items and service records. Overdue maintenance items are flagged as overdue.  
+
+### Service Records
+Service records are how you track maintenance performed on your vehicles.  Service records are tied to a maintenance item
+
+### Maintenance Items
