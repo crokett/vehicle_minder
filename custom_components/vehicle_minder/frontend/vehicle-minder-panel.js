@@ -630,7 +630,18 @@ class VehicleMinderPanel extends HTMLElement {
 
 _renderVehicleRow(v) {
     const sub = [v.year, v.make, v.model, v.vehicle_type].filter(Boolean).join(" ");
-    
+    // Check if this vehicle has any overdue items
+    const hasOverdue = v.maintenance_items 
+    ? Object.values(v.maintenance_items).some((item) => {
+        const status = getItemStatus(v, item.name);
+        return status && status.overdue;
+      }) 
+    : false;
+
+    const overdueBadge = hasOverdue 
+    ? `<span class="status-chip status-chip--overdue" style="margin-left: 8px; font-size: 0.8em;">Overdue Maintenance</span>` 
+    : '';
+
     // PURE BOOLEAN CHECK ONLY
     const usesHours = v.use_hours === true;
     
@@ -642,25 +653,30 @@ _renderVehicleRow(v) {
     const svcCount = Object.keys(v.service_records || {}).length;
     const overdueWarning = (v.overdue_count || 0) > 0;
 
-    return `
-      <div class="vehicle-row${overdueWarning ? " overdue" : ""}" data-action="select-vehicle" data-id="${v.vehicle_id}">
-        <div class="vehicle-info">
-          <div class="vehicle-name">${this._escape(v.name)}</div>
-          <div class="vehicle-sub">${this._escape(sub)}</div>
-        </div>
-        <div class="vehicle-actions" data-stop-propagation="1">
-          <span class="vehicle-badge" data-action="open-modal" data-modal="${modalTarget}" data-id="${v.vehicle_id}" title="${titleText}">
-            ${ICON.speedometer} ${metricValue}
-          </span>
-          <span class="vehicle-badge" data-action="open-modal" data-modal="add_maintenance" data-id="${v.vehicle_id}" title="Add maintenance item">
-            ${ICON.wrench} ${maintCount} item${maintCount !== 1 ? "s" : ""}
-          </span>
-          <span class="vehicle-badge" data-action="open-modal" data-modal="add_service" data-id="${v.vehicle_id}" title="Add service record">
-            ${ICON.history} ${svcCount} record${svcCount !== 1 ? "s" : ""}
-          </span>
-        </div>
+return `
+  <div class="vehicle-row${hasOverdue ? " overdue" : ""}" data-action="select-vehicle" data-id="${v.vehicle_id}">
+    <div class="vehicle-info">
+      <!-- Flex container keeps name and badge on the same line, vertically centered -->
+      <div class="vehicle-name" style="display: flex; align-items: center; flex-wrap: wrap;">
+        ${this._escape(v.name)}
+        ${overdueBadge}
       </div>
-    `;
+      <div class="vehicle-sub">${this._escape(sub)}</div>
+    </div>
+    
+    <div class="vehicle-actions" data-stop-propagation="1">
+      <span class="vehicle-badge" data-action="open-modal" data-modal="${modalTarget}" data-id="${v.vehicle_id}" title="${titleText}">
+        ${ICON.speedometer} ${metricValue}
+      </span>
+      <span class="vehicle-badge" data-action="open-modal" data-modal="add_maintenance" data-id="${v.vehicle_id}" title="Add maintenance item">
+        ${ICON.wrench} ${maintCount} item${maintCount !== 1 ? "s" : ""}
+      </span>
+      <span class="vehicle-badge" data-action="open-modal" data-modal="add_service" data-id="${v.vehicle_id}" title="Add service record">
+        ${ICON.history} ${svcCount} record${svcCount !== 1 ? "s" : ""}
+      </span>
+    </div>
+  </div>
+`;
   }
 
   // ── Detail view ────────────────────────────────────────────────────────────
@@ -669,14 +685,34 @@ _renderDetailView() {
     const vehicle = this._fleet[this._selectedId];
     if (!vehicle) return this._renderFleetView();
 
+    // Check if the currently active vehicle has any overdue items
+    const hasOverdueItems = vehicle.maintenance_items ? Object.values(vehicle.maintenance_items).some((item) => {
+      const status = getItemStatus(vehicle, item.name);
+      return status && status.overdue;
+    }) : false;
+
     const sidebarItems = Object.values(this._fleet)
       .map((v) => {
         const sub = [v.year, v.make, v.model].filter(Boolean).join(" ");
         const active = v.vehicle_id === this._selectedId ? " active" : "";
+        
+        // Check if this sidebar vehicle has any overdue items
+        const vHasOverdue = v.maintenance_items ? Object.values(v.maintenance_items).some((item) => {
+          const status = getItemStatus(v, item.name);
+          return status && status.overdue;
+        }) : false;
+
+        const sidebarBadge = vHasOverdue 
+          ? `<ha-icon icon="mdi:alert-circle" style="color: var(--error-color, #db4437); width: 16px; height: 16px; margin-left: auto; flex-shrink: 0;"></ha-icon>` 
+          : '';
+
         return `
-          <div class="sidebar-item${active}" data-action="select-vehicle" data-id="${v.vehicle_id}">
-            <div class="sidebar-item-name">${this._escape(v.name)}</div>
-            <div class="sidebar-item-sub">${this._escape(sub)}</div>
+          <div class="sidebar-item${active}" data-action="select-vehicle" data-id="${v.vehicle_id}" style="display: flex; align-items: center;">
+            <div style="overflow: hidden;">
+              <div class="sidebar-item-name">${this._escape(v.name)}</div>
+              <div class="sidebar-item-sub">${this._escape(sub)}</div>
+            </div>
+            ${sidebarBadge}
           </div>`;
       })
       .join("");
@@ -689,11 +725,16 @@ _renderDetailView() {
     const sub = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
     
     // STRICT BOOLEAN CHECK: Only true if use_hours is explicitly true
-       const usesHours = !!vehicle.use_hours;
+    const usesHours = !!vehicle.use_hours;
     
-      const metricDisplay = usesHours 
-         ? `${vehicle.current_hours || 0} hrs` 
-          : `${fmt(vehicle.current_mileage || 0)} mi`;
+    const metricDisplay = usesHours 
+      ? `${vehicle.current_hours || 0} hrs` 
+      : `${fmt(vehicle.current_mileage || 0)} mi`;
+    
+      // check for overdue maintenance items, return either nothing or overdue items
+    const mainHeaderBadge = hasOverdueItems 
+      ? `<span class="status-chip status-chip--overdue" style="margin-left: 12px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;">${ICON.warning} Overdue Maintenance</span>` 
+      : '';
 
     return `
       <div class="detail-view">
@@ -710,10 +751,12 @@ _renderDetailView() {
             </button>
           </div>
         </div>
-
         <div class="main-pane">
           <div class="main-header">
-            <div class="main-title">${this._escape(vehicle.name)}</div>
+            <div class="main-title" style="display: flex; align-items: center; flex-wrap: wrap;">
+              ${this._escape(vehicle.name)}
+              ${mainHeaderBadge}
+            </div>
             <div class="main-sub">${this._escape(sub)}${vehicle.vin ? ` · VIN: ${vehicle.vin}` : ""} · ${metricDisplay}</div>
             <div class="main-actions">
               <button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="add_service" data-id="${vehicle.vehicle_id}">
@@ -747,6 +790,7 @@ _renderDetailView() {
         </div>
       </div>`;
   }
+  
   _renderServiceTab(vehicle) {
     const records = Object.values(vehicle.service_records).sort(
       (a, b) => new Date(b.date) - new Date(a.date)

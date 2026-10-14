@@ -3,3 +3,4 @@ __pycache__/
 
 # compiled python files
 *.py[cod]
+.DS_Store
