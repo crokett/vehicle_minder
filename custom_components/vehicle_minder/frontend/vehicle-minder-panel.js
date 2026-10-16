@@ -43,7 +43,7 @@ function fmtOverdueBy(status) {
   if (!status || !status.overdue) return null;
   const type = status.interval_type;
   const by = status.overdue_by;
-  if (type === "distance") return `${fmt(by)} mi overdue`;
+  if (type === "distance") return `${fmt(by)} ${this._distanceLabelAbrv} overdue`;
   if (type === "hours")    return `${fmt(by)} hrs overdue`;
   if (type === "months")   return `${by} day${by !== 1 ? "s" : ""} overdue`;
   return "overdue";
@@ -521,11 +521,29 @@ class VehicleMinderPanel extends HTMLElement {
     this._fleet = {};
   }
 
-  set hass(hass) {
-    this._hass = hass;
-    this._syncFleet();
-    this._render();
-  }
+ set hass(hass) {
+  this._hass = hass;
+
+  hass.callWS({
+    type: "vehicle_minder/get_config",
+  })
+    .then((result) => {
+      this._distanceUnit = result.distance_unit;
+
+      // Set distance labels based on the configured unit.
+      this._distanceLabel =
+        this._distanceUnit === "km" ? "Kilometers" : "Miles";
+      
+      this._distanceLabelAbrv =
+        this._distanceUnit === "km" ? "km" : "mi";
+
+      this._syncFleet();
+      this._render();
+    })
+    .catch((err) => {
+      console.error("WebSocket error:", err);
+    });
+}
 
   // Pull vehicle data from sensor state attributes
   _syncFleet() {
@@ -645,7 +663,7 @@ _renderVehicleRow(v) {
     // PURE BOOLEAN CHECK ONLY
     const usesHours = v.use_hours === true;
     
-    const metricValue = usesHours ? `${v.current_hours || 0} hrs` : `${fmt(v.current_mileage || 0)} mi`;
+    const metricValue = usesHours ? `${v.current_hours || 0} hrs` : `${fmt(v.current_mileage || 0)} ${this._distanceLabelAbrv}`;
     const modalTarget = usesHours ? "update_hours" : "update_mileage";
     const titleText = usesHours ? "Update hours" : "Update mileage";
     
@@ -729,7 +747,7 @@ _renderDetailView() {
     
     const metricDisplay = usesHours 
       ? `${vehicle.current_hours || 0} hrs` 
-      : `${fmt(vehicle.current_mileage || 0)} mi`;
+      : `${fmt(vehicle.current_mileage || 0)} ${this._distanceLabelAbrv}`;
     
       // check for overdue maintenance items, return either nothing or overdue items
     const mainHeaderBadge = hasOverdueItems 
@@ -773,7 +791,7 @@ _renderDetailView() {
                 </button>
               ` : `
                 <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="update_mileage" data-id="${vehicle.vehicle_id}">
-                  ${ICON.speedometer || ''} Update Mileage
+                  ${ICON.speedometer || ''} Update ${this._distanceLabel}
                 </button>
               `}
 
@@ -811,7 +829,7 @@ _renderDetailView() {
       <tr>
         <td>${fmtDate(r.date)}</td>
         <td>${this._escape(r.service_type)}</td>
-        <td>${fmt(r.mileage)} mi</td>
+        <td>${fmt(r.mileage)} ${this._distanceLabelAbrv}</td>
         <td>$${Number(r.cost).toFixed(2)}</td>
         <td style="color:var(--secondary-text-color)">${this._escape(r.notes || "")}</td>
       </tr>`
@@ -825,7 +843,7 @@ _renderDetailView() {
       </div>
       <table class="data-table">
         <thead><tr>
-          <th>Date</th><th>Service Type</th><th>Mileage</th><th>Cost</th><th>Notes</th>
+          <th>Date</th><th>Service Type</th><th>${this._distanceLabel}</th><th>Cost</th><th>Notes</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -846,7 +864,7 @@ _renderDetailView() {
     const rows = items
       .map((item) => {
         let interval;
-        if (item.interval_distance) interval = `Every ${fmt(item.interval_distance)} mi`;
+        if (item.interval_distance) interval = `Every ${fmt(item.interval_distance)} ${this._distanceLabelAbrv}`;
         else if (item.interval_hours) interval = `Every ${fmt(item.interval_hours)} hrs`;
         else if (item.interval_months) interval = `Every ${fmt(item.interval_months)} month${item.interval_months !== 1 ? "s" : ""}`;
         else interval = "—";
@@ -945,7 +963,7 @@ _modalAddVehicle() {
         <label class="form-label">Tracking Metric *</label>
         <div class="metric-toggle-group" style="display: flex; gap: 20px; align-items: center; margin-top: 6px;">
           <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-            <input type="radio" name="modalMetricType" value="mileage" checked class="modal-metric-radio" /> Mileage (mi)
+            <input type="radio" name="modalMetricType" value="mileage" checked class="modal-metric-radio" /> ${this._distanceLabel} (${this._distanceLabelAbrv})
           </label>
           <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
             <input type="radio" name="modalMetricType" value="hours" class="modal-metric-radio" /> Hours (hrs)
@@ -955,7 +973,7 @@ _modalAddVehicle() {
 
       <!-- Mileage Field (Visible by default) -->
       <div class="form-group" id="modal-mileage-wrap">
-        <label class="form-label">Current Mileage</label>
+        <label class="form-label">Current ${this._distanceLabel}</label>
         <input class="form-input" id="vm-mileage" type="number" placeholder="0" min="0">
       </div>
 
@@ -993,7 +1011,7 @@ _modalAddVehicle() {
           <input class="form-input" id="vm-date" type="date" value="${new Date().toISOString().slice(0, 10)}">
         </div>
        <div class="form-group">
-          <label class="form-label">${vehicle && vehicle.use_hours ? "Hours at Service *" : "Mileage at Service *"}</label>
+          <label class="form-label">${vehicle && vehicle.use_hours ? "Hours at Service *" : `${this._distanceLabel} at Service *`}</label>
           <input class="form-input" id="vm-svc-mileage" type="number" placeholder="${vehicle ? (vehicle.use_hours ? vehicle.current_hours : vehicle.current_mileage) : 0}" min="0">
         </div>
       </div>
@@ -1026,7 +1044,7 @@ _modalAddVehicle() {
         <label class="form-label">Interval Type *</label>
         <div class="interval-toggle">
           <input type="radio" name="vm-interval-type" id="vm-int-dist" value="distance" checked>
-          <label for="vm-int-dist">By Miles</label>
+          <label for="vm-int-dist">By ${this._distanceLabel}</label>
           <input type="radio" name="vm-interval-type" id="vm-int-hrs" value="hours">
           <label for="vm-int-hrs">By Hours</label>
           <input type="radio" name="vm-interval-type" id="vm-int-months" value="months">
@@ -1034,7 +1052,7 @@ _modalAddVehicle() {
         </div>
       </div>
       <div class="form-group" id="vm-dist-group">
-        <label class="form-label">Every (miles) *</label>
+        <label class="form-label">Every (${this._distanceLabel}) *</label>
         <input class="form-input" id="vm-interval-distance" type="number" placeholder="5000" min="1">
       </div>
       <div class="form-group" id="vm-hrs-group" style="display:none">
@@ -1069,13 +1087,13 @@ _modalUpdateHours(vehicleId) {
   _modalUpdateMileage(vehicleId) {
     const vehicle = this._fleet[vehicleId];
     const current = vehicle ? vehicle.current_mileage : 0;
-    return this._modalWrap("Update Mileage", `
+    return this._modalWrap("Update ${this._distanceLabel}", `
       <div class="form-group">
-        <label class="form-label">Current Mileage *</label>
+        <label class="form-label">Current ${this._distanceLabel}*</label>
         <input class="form-input" id="vm-new-mileage" type="number" value="${current}" min="0">
       </div>
       <p style="font-size:.83rem;color:var(--secondary-text-color);margin:0">
-        Current recorded mileage: <strong>${fmt(current)} mi</strong>
+        Current recorded ${this._distanceLabel}: <strong>${fmt(current)} ${this._distanceLabelAbrv}</strong>
       </p>
       <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
     `, "Update");

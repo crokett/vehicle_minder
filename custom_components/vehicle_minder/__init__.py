@@ -12,9 +12,15 @@ from .const import DOMAIN, PLATFORMS
 from .models import Vehicle, MaintenanceItem, ServiceRecord
 from .panel import async_setup_panel
 from .storage import VehicleMinderStore
+from . import websocket
+from homeassistant.const import UnitOfLength
 
 _LOGGER = logging.getLogger(__name__)
 
+async def async_setup(hass, config):
+    """Set up Vehicle Minder."""
+    websocket.async_register(hass)
+    return True
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -43,11 +49,16 @@ async def async_setup_entry(
 
     entry.runtime_data = fleet
 
+
+    # Read the saved preference (defaults to miles if missing)
+    distance_unit = entry.data.get("distance_unit", UnitOfLength.MILES)
+
    # Initialize domain data store for entities
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "fleet": fleet,
         "entities": {},
+        "distance_unit": distance_unit,
     }
 
     # Forward entity setups to platforms
