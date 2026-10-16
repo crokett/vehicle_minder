@@ -1,5 +1,10 @@
 
   # Vehicle Minder
+[![Release][release-shield]][releases]
+[![GitHub Release Date][release-date-shield]][releases]
+[![GitHub Activity][commits-shield]][commits]
+[![hacs][hacs-shield]][hacs]
+[![License][license-shield]](LICENSE)
 
 <p align="center">
 <img width="256" height="256" alt="Vehicle Minder Logo" src="custom_components/vehicle_minder/frontend/icon.png" />
@@ -34,3 +39,12 @@ Vehicle Minder is a custom integration that gets installed in Home Assistant usi
 3.  Go to Settings → Devices & Services → Add Integration → Home Keeper and add the integration
 4.  A Vehicle Minder panel appears in the sidebar. Your fleet is stored as a single JSON document on local storage 
 5.  Read [Fleet Management](docs/fleet.md) for instructions on how to get started and add your first vehicle
+
+[releases]: https://github.com/crokett/vehicle_minder/releases
+[release-shield]: https://img.shields.io/github/v/release/crokett/vehicle_minder.svg?style=for-the-badge
+[release-date-shield]: https://img.shields.io/github/release-date/crokett/vehicle_minder?style=for-the-badge
+[commits-shield]: https://img.shields.io/github/last-commit/crokett/vehicle_minder?style=for-the-badge
+[commits]: https://github.com/crokett/vehicle_minder/commits/main
+[hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
+[hacs]: https://github.com/hacs/integration
+[license-shield]: https://img.shields.io/github/license/crokett/vehicle_minder.svg?style=for-the-badgestyle=for-the-badge
