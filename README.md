@@ -37,7 +37,7 @@ Vehicle Minder is a custom integration that gets installed in Home Assistant usi
 1.  In HACS,add  https://github.com/crokett/vehicle_minder as a custom repository with the Integration category.
 2.  Install Vehicle Minder and then restart Home Assistant
 3.  Go to Settings → Devices & Services → Add Integration → Home Keeper and add the integration
-4.  A Vehicle Minder panel appears in the sidebar. Your fleet is stored as a single JSON document on local storage 
+4.  A Vehicle Minder panel appears in the sidebar. Your fleet is stored as a single JSON document on local storage.  The first time you open Vehicle Minder you need to set the default distance metric - Miles or Kilometers. This sets what is displayed for Vehicles in the fleet view.  
 5.  Read [Fleet Management](docs/fleet.md) for instructions on how to get started and add your first vehicle
 
 [releases]: https://github.com/crokett/vehicle_minder/releases
