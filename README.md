@@ -4,6 +4,7 @@
 [![GitHub Release Date][release-date-shield]][releases]
 [![GitHub Activity][commits-shield]][commits]
 [![hacs][hacs-shield]][hacs]
+[![Issues][issues-shield]][issues]
 [![License][license-shield]](LICENSE)
 
 <p align="center">
@@ -47,4 +48,8 @@ Vehicle Minder is a custom integration that gets installed in Home Assistant usi
 [commits]: https://github.com/crokett/vehicle_minder/commits/main
 [hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
 [hacs]: https://github.com/hacs/integration
-[license-shield]: https://img.shields.io/github/license/crokett/vehicle_minder.svg?style=for-the-badgestyle=for-the-badge
+[license-shield]: https://img.shields.io/github/license/crokett/vehicle_minder.svg?style=for-the-badge
+[issues-shield]: https://img.shields.io/github/issues/crokett/vehicle_minder.svg?style=for-the-badge
+[issues]: https://github.com/crokett/vehicle_minder/issues
+
+
