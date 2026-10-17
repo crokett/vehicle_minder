@@ -521,28 +521,43 @@ class VehicleMinderPanel extends HTMLElement {
     this._fleet = {};
   }
 
- set hass(hass) {
+
+set hass(hass) {
   this._hass = hass;
 
-  hass.callWS({
-    type: "vehicle_minder/get_config",
-  })
-    .then((result) => {
-      this._distanceUnit = result.distance_unit;
+  // Load configuration once.
+  if (!this._configLoaded) {
+    this._configLoaded = true;
 
-      // Set distance labels based on the configured unit.
-      this._distanceLabel =
-        this._distanceUnit === "km" ? "Kilometers" : "Miles";
-      
-      this._distanceLabelAbrv =
-        this._distanceUnit === "km" ? "km" : "mi";
-
-      this._syncFleet();
-      this._render();
+    hass.callWS({
+      type: "vehicle_minder/get_config",
     })
-    .catch((err) => {
-      console.error("WebSocket error:", err);
-    });
+      .then((result) => {
+        this._distanceUnit = result.distance_unit;
+
+        this._distanceLabel =
+          this._distanceUnit === "km" ? "Kilometers" : "Miles";
+
+        this._distanceLabelAbrv =
+          this._distanceUnit === "km" ? "km" : "mi";
+
+        this._syncFleet();
+        this._render();
+      })
+      .catch((err) => {
+        this._configLoaded = false;
+        console.error("WebSocket error:", err);
+      });
+
+    return;
+  }
+
+  this._syncFleet();
+
+  // Preserve unsaved form values while a modal is open.
+  if (!this._modal) {
+    this._render();
+  }
 }
 
   // Pull vehicle data from sensor state attributes
