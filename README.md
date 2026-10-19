@@ -7,9 +7,7 @@
 [![Issues][issues-shield]][issues]
 [![License][license-shield]](LICENSE)
 
-<p align="center">
-<img width="256" height="256" alt="Vehicle Minder Logo"  src="https://raw.githubusercontent.com/crokett/vehicle_minder/main/custom_components/vehicle_minder/frontend/icon.png" />
-</p>
+![Vehicle Minder Logo](https://raw.githubusercontent.com/crokett/vehicle_minder/main/custom_components/vehicle_minder/frontend/icon.png)
 
 
 ## Overview
