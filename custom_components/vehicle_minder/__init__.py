@@ -6,6 +6,8 @@ import logging
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.http import Path, StaticPathConfig
+
 import voluptuous as vol
 
 from .const import DOMAIN, PLATFORMS
@@ -28,6 +30,16 @@ async def async_setup_entry(
 ) -> bool:
     """Set up the integration from a config entry."""
 
+     # Register the frontend folder so files can be fetched via /vehicle_minder_assets/...
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                "/vehicle_minder_assets",
+                str(Path(__file__).parent / "frontend"),
+                cache_headers=False, # Set to True once stable for caching
+            )
+        ]
+    )
     # Register static frontend panel
     await async_setup_panel(hass)
 
@@ -196,6 +208,7 @@ async def async_setup_entry(
 
         item = MaintenanceItem(
             name=call.data["name"],
+            due_soon_threshold=call.data["due_soon_threshold"],
             interval_distance=call.data.get("interval_distance"),
             interval_hours=call.data.get("interval_hours"),
             interval_months=call.data.get("interval_months"),
@@ -217,9 +230,11 @@ async def async_setup_entry(
             {
                 vol.Required("vehicle_id"): str,
                 vol.Required("name"): str,
+                vol.Optional("due_soon_threshold", default=0.0): vol.Coerce(float),
                 vol.Exclusive("interval_distance", "interval"): int,
                 vol.Exclusive("interval_hours", "interval"): int,
                 vol.Exclusive("interval_months", "interval"): int,
+
             }
         ),
     )
