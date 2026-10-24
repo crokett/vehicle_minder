@@ -31,6 +31,18 @@ function lastServicedDate(vehicle, itemName) {
   return matches.length ? matches[0].date : null;
 }
 
+function lastServicedInterval(vehicle,itemName) {
+
+  const records = Object.values(vehicle.service_records || {});
+  const matches = records
+    .filter((r) => r.service_type && r.service_type.toLowerCase() === itemName.toLowerCase())
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    return matches.length && matches[0].mileage != null
+      ? matches[0].mileage
+      : "-";
+
+}
+
 // Find the pre-computed status entry for a maintenance item by name.
 // Falls back to a simple local calculation if maintenance_status is absent
 // (e.g. before the sensor attribute propagates).
@@ -40,7 +52,7 @@ function getItemStatus(vehicle, itemName) {
 }
 
 function fmtOverdueBy(status) {
-  if (!status || !status.overdue) return null;
+  if (!status || status.not_tracked || !status.overdue) return null;
   const type = status.interval_type;
   const by = status.overdue_by;
   if (type === "distance") return `${fmt(by)} ${this._distanceLabelAbrv} overdue`;
@@ -49,440 +61,36 @@ function fmtOverdueBy(status) {
   return "overdue";
 }
 
+function fmtDueSoonBy(status){
+  //if (!status || status.due_soon) return null;
+  if (!status || status.not_tracked || !status.due_soon) return null;
+  const type = status.interval_type;
+  const remain = status.remaining;
+  if (type === "distance") return `Due in: ${fmt(remain)} ${this._distanceLabelAbrv}`;
+  if (type === "hours")    return `Due in: ${fmt(remain)} hrs overdue`;
+  if (type === "months")   return `Due in: ${remain} day${remain !== 1 ? "s" : ""}`;
+  return "due soon"
+}
 // ---------------------------------------------------------------------------
 // Styles — uses HA CSS variables so it blends with any theme
 // ---------------------------------------------------------------------------
+let STYLES = "";
+let stylesLoaded = false;
+let stylesFailed = false;
 
-const STYLES = `
-  :host {
-    display: block;
-    height: 100%;
-    font-family: var(--primary-font-family, Roboto, sans-serif);
-    color: var(--primary-text-color);
-    background: var(--lovelace-background, var(--primary-background-color));
-  }
-
-  /* ── Top toolbar ── */
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 20px;
-    background: var(--app-header-background-color, var(--primary-color));
-    color: var(--app-header-text-color, #fff);
-    box-shadow: 0 2px 4px rgba(0,0,0,.2);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-  .toolbar img.logo {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-  }
-  .toolbar h1 {
-    flex: 1;
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 500;
-    letter-spacing: .02em;
-  }
-
-  /* ── Buttons ── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 16px;
-    border-radius: 20px;
-    border: none;
-    cursor: pointer;
-    font-size: .85rem;
-    font-weight: 500;
-    transition: filter .15s, opacity .15s;
-  }
-  .btn:hover { filter: brightness(.92); }
-  .btn:active { opacity: .8; }
-  .btn-primary {
-    background: var(--primary-color);
-    color: #fff;
-  }
-  .btn-secondary {
-    background: var(--secondary-background-color);
-    color: var(--primary-text-color);
-    border: 1px solid var(--divider-color);
-  }
-  .btn-danger {
-    background: transparent;
-    color: var(--error-color, #db4437);
-    border: 1px solid var(--error-color, #db4437);
-  }
-  .btn-sm {
-    padding: 4px 11px;
-    font-size: .78rem;
-  }
-  .btn svg { flex-shrink: 0; }
-
-  /* ── Fleet (list) view ── */
-  .fleet-view {
-    padding: 20px;
-  }
-  .fleet-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-  }
-  .search-box {
-    flex: 1;
-    min-width: 140px;
-    max-width: 300px;
-    padding: 7px 12px;
-    border-radius: 20px;
-    border: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-    color: var(--primary-text-color);
-    font-size: .88rem;
-    outline: none;
-  }
-  .search-box:focus { border-color: var(--primary-color); }
-
-  /* Vehicle list rows */
-  .vehicle-list {
-    border: 1px solid var(--divider-color);
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--card-background-color);
-  }
-  .vehicle-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--divider-color);
-    cursor: pointer;
-    transition: background .12s;
-  }
-  .vehicle-row:last-child { border-bottom: none; }
-  .vehicle-row:hover { background: var(--secondary-background-color); }
-  .vehicle-row.selected { background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
-  .vehicle-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--primary-color) 15%, transparent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    color: var(--primary-color);
-  }
-  .vehicle-info { flex: 1; min-width: 0; }
-  .vehicle-name { font-weight: 500; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vehicle-sub { font-size: .8rem; color: var(--secondary-text-color); margin-top: 2px; }
-  .vehicle-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
-  .vehicle-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    border-radius: 12px;
-    border: 1px solid var(--divider-color);
-    font-size: .75rem;
-    color: var(--secondary-text-color);
-    cursor: pointer;
-    transition: background .12s;
-    white-space: nowrap;
-  }
-  .vehicle-badge:hover { background: var(--secondary-background-color); }
-
-  .empty-state {
-    padding: 40px;
-    text-align: center;
-    color: var(--secondary-text-color);
-    font-size: .9rem;
-  }
-  .empty-state svg { display: block; margin: 0 auto 12px; opacity: .4; }
-
-  /* ── Detail view (sidebar + main) ── */
-  .detail-view {
-    display: flex;
-    height: calc(100vh - 57px);
-    overflow: hidden;
-  }
-
-  /* Sidebar */
-  .sidebar {
-    width: 280px;
-    flex-shrink: 0;
-    border-right: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .sidebar-header {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--divider-color);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .sidebar-back {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--primary-color);
-    font-size: .85rem;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 0;
-  }
-  .sidebar-back:hover { text-decoration: underline; }
-  .sidebar-list { flex: 1; overflow-y: auto; }
-  .sidebar-item {
-    padding: 12px 16px;
-    cursor: pointer;
-    border-bottom: 1px solid var(--divider-color);
-    transition: background .12s;
-    border-left: 3px solid transparent;
-  }
-  .sidebar-item:hover { background: var(--secondary-background-color); }
-  .sidebar-item.active {
-    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
-    border-left-color: var(--primary-color);
-  }
-  .sidebar-item-name { font-weight: 500; font-size: .9rem; }
-  .sidebar-item-sub { font-size: .78rem; color: var(--secondary-text-color); margin-top: 2px; }
-  .sidebar-footer {
-    padding: 12px 16px;
-    border-top: 1px solid var(--divider-color);
-  }
-
-  /* Main pane */
-  .main-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: var(--lovelace-background, var(--primary-background-color));
-  }
-  .main-header {
-    padding: 20px 24px 0;
-    border-bottom: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-  }
-  .main-title { font-size: 1.3rem; font-weight: 600; margin: 0 0 4px; }
-  .main-sub { font-size: .83rem; color: var(--secondary-text-color); margin-bottom: 14px; }
-  .main-actions { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-
-  /* Tabs */
-  .tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: none;
-    margin-top: 4px;
-  }
-  .tab {
-    padding: 10px 20px;
-    cursor: pointer;
-    font-size: .88rem;
-    font-weight: 500;
-    color: var(--secondary-text-color);
-    border-bottom: 3px solid transparent;
-    transition: color .15s, border-color .15s;
-    white-space: nowrap;
-  }
-  .tab:hover { color: var(--primary-text-color); }
-  .tab.active {
-    color: var(--primary-color);
-    border-bottom-color: var(--primary-color);
-  }
-
-  /* Tab content */
-  .tab-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px 24px;
-  }
-  .section-label {
-    font-size: .75rem;
-    font-weight: 600;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--secondary-text-color);
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  /* Table */
-  .data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: .86rem;
-  }
-  .data-table th {
-    text-align: left;
-    padding: 8px 12px;
-    font-size: .75rem;
-    font-weight: 600;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-    color: var(--secondary-text-color);
-    border-bottom: 2px solid var(--divider-color);
-  }
-  .data-table td {
-    padding: 11px 12px;
-    border-bottom: 1px solid var(--divider-color);
-    vertical-align: middle;
-  }
-  .data-table tbody tr:last-child td { border-bottom: none; }
-  .data-table tbody tr:hover { background: var(--secondary-background-color); }
-
-  .info-box {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--info-color, #4fc3f7) 10%, transparent);
-    color: var(--primary-text-color);
-    font-size: .86rem;
-  }
-  .info-box svg { color: var(--info-color, #4fc3f7); flex-shrink: 0; }
-
-  /* ── Modal ── */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,.45);
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-  }
-  .modal {
-    background: var(--card-background-color);
-    border-radius: 12px;
-    width: 100%;
-    max-width: 480px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0,0,0,.25);
-  }
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 20px 12px;
-    border-bottom: 1px solid var(--divider-color);
-  }
-  .modal-title { font-size: 1rem; font-weight: 600; margin: 0; }
-  .modal-close {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--secondary-text-color);
-    padding: 4px;
-    line-height: 1;
-    font-size: 1.2rem;
-  }
-  .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    padding: 12px 20px 18px;
-    border-top: 1px solid var(--divider-color);
-  }
-  .form-group { display: flex; flex-direction: column; gap: 5px; }
-  .form-label { font-size: .82rem; font-weight: 500; color: var(--secondary-text-color); }
-  .form-input, .form-select, .form-textarea {
-    padding: 8px 12px;
-    border: 1px solid var(--divider-color);
-    border-radius: 6px;
-    background: var(--secondary-background-color);
-    color: var(--primary-text-color);
-    font-size: .9rem;
-    font-family: inherit;
-    outline: none;
-    transition: border-color .15s;
-  }
-  .form-input:focus, .form-select:focus, .form-textarea:focus {
-    border-color: var(--primary-color);
-  }
-  .form-textarea { resize: vertical; min-height: 70px; }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .form-hint { font-size: .75rem; color: var(--secondary-text-color); margin-top: 2px; }
-  .interval-toggle { display: flex; gap: 0; border: 1px solid var(--divider-color); border-radius: 6px; overflow: hidden; }
-  .interval-toggle label {
-    flex: 1;
-    text-align: center;
-    padding: 7px 4px;
-    cursor: pointer;
-    font-size: .82rem;
-    transition: background .12s, color .12s;
-  }
-  .interval-toggle input[type=radio] { display: none; }
-  .interval-toggle input[type=radio]:checked + label {
-    background: var(--primary-color);
-    color: #fff;
-  }
-
-  /* ── Overdue warning badge (inline in vehicle name) ── */
-  .overdue-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--error-color, #db4437) 15%, transparent);
-    color: var(--error-color, #db4437);
-    font-size: .75rem;
-    font-weight: 600;
-    vertical-align: middle;
-  }
-
-  /* Alert state for the vehicle icon circle */
-  .vehicle-icon--alert {
-    background: color-mix(in srgb, var(--error-color, #db4437) 15%, transparent);
-    color: var(--error-color, #db4437);
-  }
-
-  /* ── Status chips in maintenance table ── */
-  .status-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 3px 9px;
-    border-radius: 10px;
-    font-size: .76rem;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-  .status-chip--overdue {
-    background: color-mix(in srgb, var(--error-color, #db4437) 15%, transparent);
-    color: var(--error-color, #db4437);
-  }
-  .status-chip--ok {
-    background: color-mix(in srgb, var(--success-color, #4caf50) 15%, transparent);
-    color: var(--success-color, #4caf50);
-  }
-  .status-chip--unknown {
-    color: var(--secondary-text-color);
-  }
-
-  /* Highlight overdue rows in the maintenance table */
-  .row-overdue td:first-child {
-    border-left: 3px solid var(--error-color, #db4437);
-    padding-left: 9px;
-  }
-`;
+const stylesPromise = fetch("/vehicle_minder_assets/panel.css")
+  .then(response => {
+    if (!response.ok) throw new Error(`Failed to load panel.css: ${response.status}`);
+    return response.text();
+  })
+  .then(css => {
+    STYLES = css;
+    stylesLoaded = true;
+  })
+  .catch(error => {
+    console.error("Vehicle Minder: Failed to load styles", error);
+    stylesFailed = true;
+  });
 
 // ---------------------------------------------------------------------------
 // SVG icons
@@ -604,12 +212,26 @@ set hass(hass) {
 
   // ── Rendering ──────────────────────────────────────────────────────────────
 
-  _render() {
+_render() {
     const root = this.shadowRoot;
+
+    // If styles are still loading, render once without them and queue a re-render
+    if (!stylesLoaded && !stylesFailed) {
+      root.innerHTML = `<style></style>${this._renderToolbar()}${this._renderBody()}${this._renderModal()}`;
+      this._bindEvents();
+
+      stylesPromise.then(() => {
+        if (stylesLoaded) {
+          this._render(); // Re-render automatically once CSS arrives
+        }
+      });
+      return;
+    }
+
+    // Normal render with fully loaded styles (or fallback if it failed)
     root.innerHTML = `<style>${STYLES}</style>${this._renderToolbar()}${this._renderBody()}${this._renderModal()}`;
     this._bindEvents();
   }
-
   _renderToolbar() {
     return `
       <div class="toolbar">
@@ -670,9 +292,20 @@ _renderVehicleRow(v) {
         return status && status.overdue;
       }) 
     : false;
+     
+    const hasDueSoon =  v.maintenance_items 
+    ? Object.values(v.maintenance_items).some((item) => {
+        const status = getItemStatus(v, item.name);
+        return status && status.due_soon
+      }) 
+    : false;
 
     const overdueBadge = hasOverdue 
     ? `<span class="status-chip status-chip--overdue" style="margin-left: 8px; font-size: 0.8em;">Overdue Maintenance</span>` 
+    : '';
+     
+    const dueSoonBadge = hasDueSoon 
+    ? `<span class="status-chip status-chip--due-soon" style="margin-left: 8px; font-size: 0.8em;">Maintenance Due Soon</span>` 
     : '';
 
     // PURE BOOLEAN CHECK ONLY
@@ -685,7 +318,8 @@ _renderVehicleRow(v) {
     const maintCount = Object.keys(v.maintenance_items || {}).length;
     const svcCount = Object.keys(v.service_records || {}).length;
     const overdueWarning = (v.overdue_count || 0) > 0;
-
+  
+   // style vehicle row in fleet view
 return `
   <div class="vehicle-row${hasOverdue ? " overdue" : ""}" data-action="select-vehicle" data-id="${v.vehicle_id}">
     <div class="vehicle-info">
@@ -693,6 +327,7 @@ return `
       <div class="vehicle-name" style="display: flex; align-items: center; flex-wrap: wrap;">
         ${this._escape(v.name)}
         ${overdueBadge}
+        ${dueSoonBadge}
       </div>
       <div class="vehicle-sub">${this._escape(sub)}</div>
     </div>
@@ -723,6 +358,11 @@ _renderDetailView() {
       const status = getItemStatus(vehicle, item.name);
       return status && status.overdue;
     }) : false;
+    
+    const hasDueSoonItems = vehicle.maintenance_items ? Object.values(vehicle.maintenance_items).some((item) => {
+      const status = getItemStatus(vehicle, item.name);
+      return status && status.due_soon;
+    }) : false;
 
     const sidebarItems = Object.values(this._fleet)
       .map((v) => {
@@ -735,8 +375,17 @@ _renderDetailView() {
           return status && status.overdue;
         }) : false;
 
-        const sidebarBadge = vHasOverdue 
-          ? `<ha-icon icon="mdi:alert-circle" style="color: var(--error-color, #db4437); width: 16px; height: 16px; margin-left: auto; flex-shrink: 0;"></ha-icon>` 
+        const vHasDueSoon = v.maintenance_items ? Object.values(v.maintenance_items).some((item) => {
+          const status = getItemStatus(v, item.name);
+          return status && status.due_soon;
+        }) : false;
+
+        const overDueSidebarBadge = vHasOverdue 
+          ? `<ha-icon icon="mdi:alert-circle" style="color: var(--error-color, #db4437); width: 16px; height: 16px;  flex-shrink: 0;"></ha-icon>` 
+          : '';
+
+        const dueSoonSidebarBadge = vHasDueSoon
+        ? `<ha-icon icon="mdi:alert-circle" style="color: var(--warning-color,  #ebda18); width: 16px; height: 16px;  flex-shrink: 0;"></ha-icon>` 
           : '';
 
         return `
@@ -745,7 +394,11 @@ _renderDetailView() {
               <div class="sidebar-item-name">${this._escape(v.name)}</div>
               <div class="sidebar-item-sub">${this._escape(sub)}</div>
             </div>
-            ${sidebarBadge}
+            <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
+              
+              ${overDueSidebarBadge}
+              ${dueSoonSidebarBadge}
+            </div>
           </div>`;
       })
       .join("");
@@ -765,8 +418,12 @@ _renderDetailView() {
       : `${fmt(vehicle.current_mileage || 0)} ${this._distanceLabelAbrv}`;
     
       // check for overdue maintenance items, return either nothing or overdue items
-    const mainHeaderBadge = hasOverdueItems 
+    const overDueHeaderBadge = hasOverdueItems 
       ? `<span class="status-chip status-chip--overdue" style="margin-left: 12px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;">${ICON.warning} Overdue Maintenance</span>` 
+      : '';
+    
+    const dueSoonHeaderBadge = hasDueSoonItems
+      ? `<span class="status-chip status-chip--due-soon" style="margin-left: 12px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;">${ICON.warning} Maintenance Due Soon</span>` 
       : '';
 
     return `
@@ -788,7 +445,8 @@ _renderDetailView() {
           <div class="main-header">
             <div class="main-title" style="display: flex; align-items: center; flex-wrap: wrap;">
               ${this._escape(vehicle.name)}
-              ${mainHeaderBadge}
+              ${overDueHeaderBadge}
+              ${dueSoonHeaderBadge}
             </div>
             <div class="main-sub">${this._escape(sub)}${vehicle.vin ? ` · VIN: ${vehicle.vin}` : ""} · ${metricDisplay}</div>
             <div class="main-actions">
@@ -825,6 +483,9 @@ _renderDetailView() {
   }
   
   _renderServiceTab(vehicle) {
+    const useHours = vehicle.use_hours === true;
+    const intervalLabel = useHours ? "Hours" : this._distanceLabel;
+    const intervalLabelAbrv = useHours ? "Hrs" : this._distanceLabelAbrv;
     const records = Object.values(vehicle.service_records).sort(
       (a, b) => new Date(b.date) - new Date(a.date)
     );
@@ -844,7 +505,7 @@ _renderDetailView() {
       <tr>
         <td>${fmtDate(r.date)}</td>
         <td>${this._escape(r.service_type)}</td>
-        <td>${fmt(r.mileage)} ${this._distanceLabelAbrv}</td>
+        <td>${fmt(r.mileage)} ${intervalLabelAbrv}</td>
         <td>$${Number(r.cost).toFixed(2)}</td>
         <td style="color:var(--secondary-text-color)">${this._escape(r.notes || "")}</td>
       </tr>`
@@ -858,7 +519,7 @@ _renderDetailView() {
       </div>
       <table class="data-table">
         <thead><tr>
-          <th>Date</th><th>Service Type</th><th>${this._distanceLabel}</th><th>Cost</th><th>Notes</th>
+          <th>Date</th><th>Service Type</th><th>${intervalLabel}</th><th>Cost</th><th>Notes</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -879,27 +540,44 @@ _renderDetailView() {
     const rows = items
       .map((item) => {
         let interval;
-        if (item.interval_distance) interval = `Every ${fmt(item.interval_distance)} ${this._distanceLabelAbrv}`;
-        else if (item.interval_hours) interval = `Every ${fmt(item.interval_hours)} hrs`;
-        else if (item.interval_months) interval = `Every ${fmt(item.interval_months)} month${item.interval_months !== 1 ? "s" : ""}`;
+        let intervalLabelAbrv = ""
+        if (item.interval_distance){ interval = `Every ${fmt(item.interval_distance)} ${this._distanceLabelAbrv}`;
+            intervalLabelAbrv = this._distanceLabelAbrv;
+          }
+        else if (item.interval_hours){ interval = `Every ${fmt(item.interval_hours)} hrs`;
+              intervalLabelAbrv = "hrs"
+        }
+        else if (item.interval_months){ interval = `Every ${fmt(item.interval_months)} month${item.interval_months !== 1 ? "s" : ""}`;
+               intervalLabelAbrv = "mos"
+      }
         else interval = "—";
 
         const status = getItemStatus(vehicle, item.name);
         const lastDate = status ? status.last_service_date : lastServicedDate(vehicle, item.name);
+        const lastInterval = lastServicedInterval(vehicle, item.name);
         const overdue = status && status.overdue;
+        const due_soon = status && status.due_soon;
         const overdueLabel = overdue
-          ? `<span class="status-chip status-chip--overdue">${ICON.warning} ${fmtOverdueBy(status)}</span>`
-          : status && status.last_service_date
-            ? `<span class="status-chip status-chip--ok">${ICON.check} OK</span>`
-            : `<span class="status-chip status-chip--unknown">—</span>`;
+        const due_soonLabel = due_soon
+        
 
-        return `
-        <tr class="${overdue ? "row-overdue" : ""}">
-          <td>${this._escape(item.name)}</td>
-          <td>${interval}</td>
-          <td>${lastDate ? fmtDate(lastDate) : '<span style="color:var(--secondary-text-color)">Never</span>'}</td>
-          <td>${overdueLabel}</td>
-        </tr>`;
+        status && status.overdue
+          ? `<span class="status-chip status-chip--overdue">${ICON.warning} ${fmtOverdueBy(status)}</span>`
+          : status && status.due_soon
+            ? `<span class="status-chip status-chip--due-soon">${ICON.warning} ${fmtDueSoonBy(status)}</span>`
+            : status && status.last_service_date
+              ? `<span class="status-chip status-chip--ok">${ICON.check} OK</span>`
+              : `<span class="status-chip status-chip--unknown">—</span>`;
+          
+          
+      return `
+      <tr class="${overdue ? "row-overdue" : due_soon ? "row-due-soon" : ""}">
+        <td>${this._escape(item.name)}</td>
+        <td>${interval}</td>
+        <td>${lastDate ? fmtDate(lastDate) : '<span style="color:var(--secondary-text-color)">Never</span>'}</td>
+        <td>${lastInterval} ${intervalLabelAbrv}</td>
+        <td>${this._escape(item.due_soon_threshold)}</td>
+      </tr>`;
       })
       .join("");
 
@@ -910,7 +588,7 @@ _renderDetailView() {
       </div>
       <table class="data-table">
         <thead><tr>
-          <th>Item</th><th>Interval</th><th>Last Serviced</th><th>Status</th>
+          <th>Item</th><th>Interval</th><th>Date Last Serviced</th><th>Interval Last Serviced</th><th>Threshold Due</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -989,13 +667,13 @@ _modalAddVehicle() {
       <!-- Mileage Field (Visible by default) -->
       <div class="form-group" id="modal-mileage-wrap">
         <label class="form-label">Current ${this._distanceLabel}</label>
-        <input class="form-input" id="vm-mileage" type="number" placeholder="0" min="0">
+        <input class="form-input" id="vm-mileage" type="number" step="1" placeholder="0" min="1">
       </div>
 
       <!-- Hours Field (Hidden by default) -->
       <div class="form-group" id="modal-hours-wrap" style="display: none;">
         <label class="form-label">Current Hours</label>
-        <input class="form-input" id="vm-hours" type="number" step="0.1" placeholder="0" min="0">
+        <input class="form-input" id="vm-hours" type="number" step="1" placeholder="0" min="1">
       </div>
 
       <div class="form-group">
@@ -1012,6 +690,14 @@ _modalAddVehicle() {
   _modalAddService(vehicleId) {
     
     const vehicle = this._fleet[vehicleId];
+    const currentValue = vehicle
+      ? vehicle.use_hours
+        ? vehicle.current_hours
+        : vehicle.current_mileage
+      : null;
+
+
+   
     // Build options from existing maintenance items for convenience
     const items = vehicle ? Object.values(vehicle.maintenance_items) : [];
     const datalist = items.length
@@ -1020,14 +706,16 @@ _modalAddVehicle() {
 
     return this._modalWrap("Add Service Record", `
       ${datalist}
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Date *</label>
           <input class="form-input" id="vm-date" type="date" value="${new Date().toISOString().slice(0, 10)}">
         </div>
        <div class="form-group">
-          <label class="form-label">${vehicle && vehicle.use_hours ? "Hours at Service *" : `${this._distanceLabel} at Service *`}</label>
-          <input class="form-input" id="vm-svc-mileage" type="number" placeholder="${vehicle ? (vehicle.use_hours ? vehicle.current_hours : vehicle.current_mileage) : 0}" min="0">
+          <label class="form-label">${vehicle && vehicle.use_hours ? "Hours at Service (defaults to current vehicle hours)" :
+                  `${this._distanceLabel} at Service (defaults to current vehicle ${this._distanceLabel}) `}</label>
+          <input class="form-input" id="vm-svc-mileage" type="number" value="${currentValue ?? ""}" min="1">
         </div>
       </div>
       <div class="form-group">
@@ -1049,39 +737,57 @@ _modalAddVehicle() {
     `, "Save Record");
   }
 
-  _modalAddMaintenance(vehicleId) {
-    return this._modalWrap("Add Maintenance Item", `
-      <div class="form-group">
-        <label class="form-label">Item Name *</label>
-        <input class="form-input" id="vm-item-name" placeholder="e.g. Oil Change, Air Filter, Transmission Fluid">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Interval Type *</label>
-        <div class="interval-toggle">
-          <input type="radio" name="vm-interval-type" id="vm-int-dist" value="distance" checked>
-          <label for="vm-int-dist">By ${this._distanceLabel}</label>
-          <input type="radio" name="vm-interval-type" id="vm-int-hrs" value="hours">
-          <label for="vm-int-hrs">By Hours</label>
-          <input type="radio" name="vm-interval-type" id="vm-int-months" value="months">
-          <label for="vm-int-months">By Months</label>
-        </div>
-      </div>
-      <div class="form-group" id="vm-dist-group">
-        <label class="form-label">Every (${this._distanceLabel}) *</label>
-        <input class="form-input" id="vm-interval-distance" type="number" placeholder="5000" min="1">
-      </div>
-      <div class="form-group" id="vm-hrs-group" style="display:none">
-        <label class="form-label">Every (hours) *</label>
-        <input class="form-input" id="vm-interval-hours" type="number" placeholder="100" min="1">
-      </div>
-      <div class="form-group" id="vm-months-group" style="display:none">
-        <label class="form-label">Every (months) *</label>
-        <input class="form-input" id="vm-interval-months" type="number" placeholder="12" min="1">
-      </div>
-      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
-    `, "Add Item");
-  }
+ _modalAddMaintenance(vehicleId) {
+   const showServiceMessage =
+  this._modal?.fromAddService === true;
 
+  return this._modalWrap("Add Maintenance Item", `
+    ${showServiceMessage ? `
+    <div class="info-box">
+      ${ICON.info}
+      You have no maintenance items for this vehicle.
+      Add a maintenance item before creating a service record. 
+      Service records must be tied to a maintenance item.
+    </div>
+  ` : ""}
+    <div class="form-group">
+      <label class="form-label">Item Name *</label>
+      <input class="form-input" id="vm-item-name" placeholder="e.g. Oil Change, Air Filter, Transmission Fluid">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Interval Type *</label>
+      <div class="interval-toggle">
+        <input type="radio" name="vm-interval-type" id="vm-int-dist" value="distance" checked>
+        <label for="vm-int-dist">By ${this._distanceLabel}</label>
+        <input type="radio" name="vm-interval-type" id="vm-int-hrs" value="hours">
+        <label for="vm-int-hrs">By Hours</label>
+        <input type="radio" name="vm-interval-type" id="vm-int-months" value="months">
+        <label for="vm-int-months">By Months</label>
+      </div>
+    </div>
+    <div class="form-group" id="vm-dist-group">
+      <label class="form-label">Every (${this._distanceLabel}) *</label>
+      <input class="form-input" id="vm-interval-distance" type="number" placeholder="5000" min="1">
+    </div>
+    <div class="form-group" id="vm-hrs-group" style="display:none">
+      <label class="form-label">Every (hours) *</label>
+      <input class="form-input" id="vm-interval-hours" type="number" placeholder="100" min="1">
+    </div>
+    <div class="form-group" id="vm-months-group" style="display:none">
+      <label class="form-label">Every (months) *</label>
+      <input class="form-input" id="vm-interval-months" type="number" placeholder="12" min="1">
+    </div>
+    <!-- FIXED: Removed style="display:none" and fixed missing quote on class -->
+    <div class="form-group" id="due-soon-group">
+      <label class="form-label">Upcoming Maintenance Warning Threshold</label>
+      <label class="form-label" style="font-size:0.85em; opacity:0.8;">
+        Measured in same interval selected above (e.g. if months is selected, enter months). Leave at 0 for no warning.
+      </label>
+      <input class="form-input" id="vm-due-soon-threshold" type="number" placeholder="0" min="0">
+    </div>
+    <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
+  `, "Add Item");
+}
 
 _modalUpdateHours(vehicleId) {
     const vehicle = this._fleet[vehicleId];
@@ -1102,7 +808,7 @@ _modalUpdateHours(vehicleId) {
   _modalUpdateMileage(vehicleId) {
     const vehicle = this._fleet[vehicleId];
     const current = vehicle ? vehicle.current_mileage : 0;
-    return this._modalWrap("Update ${this._distanceLabel}", `
+    return this._modalWrap(`Update ${this._distanceLabel}`, `
       <div class="form-group">
         <label class="form-label">Current ${this._distanceLabel}*</label>
         <input class="form-input" id="vm-new-mileage" type="number" value="${current}" min="0">
@@ -1132,6 +838,10 @@ _modalUpdateHours(vehicleId) {
   // ── Event binding ──────────────────────────────────────────────────────────
 
   _bindEvents() {
+    // check for already bound events:
+     if (this._eventsBound) return;
+       this._eventsBound = true;
+
     const root = this.shadowRoot;
     // Listen for changes on the metric radio buttons to toggle visibility
     root.addEventListener("change", (e) => {
@@ -1176,9 +886,27 @@ _modalUpdateHours(vehicleId) {
           this._render();
           break;
         case "open-modal":
+          const modalType = el.dataset.modal;
           this._modal = { type: el.dataset.modal, vehicleId: id };
+          
+          // check for no maintenace items while adding a service record
+          // service record must be tied to maintenace item
+          if (modalType === "add_service") {
+          const vehicle = this._fleet[id];
+          const items = vehicle
+             ? Object.values(vehicle.maintenance_items || {})
+            : [];
+
+        if (items.length === 0) {
+           this._modal = { type: "add_maintenance", vehicleId: id,  fromAddService: true,};
+           this._render();
+           break;
+          }
+        }
           this._render();
           break;
+        
+
         case "close-modal":
           this._modal = null;
           this._render();
@@ -1241,11 +969,26 @@ _modalUpdateHours(vehicleId) {
           const mileage = root.getElementById("vm-mileage")?.value;
           const hours = root.getElementById("vm-hours")?.value;
 
-        // Construct exclusive payload property strictly using our clean boolean
-        const usageMetric = useHours 
-         ? { current_hours: parseFloat(hours || "0") } 
-          : { current_mileage: parseInt(mileage || "0", 10) };
-         
+          // Validate the usage metric that applies to this vehicle.
+        
+          if (useHours) {
+         if (hours === "" || hours == null || !Number.isFinite(Number(hours)) || Number(hours) <= 0) {
+            console.count("Hours validation alert");
+            alert("Hours must be greater than zero.");
+            return;
+         }
+         } else {
+          if (mileage === "" || mileage == null || !Number.isFinite(Number(mileage)) || Number(mileage) <= 0) {
+              console.count("Miles validation alert");
+              alert("Mileage must be greater than zero.");
+              return;
+          }
+          }
+
+// Construct the payload for the applicable usage metric.
+const usageMetric = useHours
+  ? { current_hours: parseFloat(hours) }
+  : { current_mileage: parseInt(mileage, 10) };
           this._callService("add_vehicle", {
             name, make, model, year,
             vehicle_type: vehicleType,
@@ -1257,14 +1000,26 @@ _modalUpdateHours(vehicleId) {
         }
         
         case "add_service": {
+        const usageValue = val("vm-svc-mileage");
+
+          if (
+            usageValue === "" ||
+            usageValue == null ||
+            !Number.isFinite(Number(usageValue)) ||
+            Number(usageValue) <= 0
+          ) {
+            alert("Service hours or mileage must be greater than zero.");
+            return;
+          }
+            
           const vehicle_id = val("vm-vehicle-id");
           const date = val("vm-date");
-          const mileage = parseInt(val("vm-svc-mileage") || "0", 10);
+          
           const service_type = val("vm-service-type");
           const cost = parseFloat(val("vm-cost") || "0");
           const notes = val("vm-notes");
           if (!date || !service_type) { alert("Please fill in all required fields."); return; }
-          this._callService("add_service_record", { vehicle_id, date, mileage, service_type, cost, notes });
+          this._callService("add_service_record", { vehicle_id, date,   mileage: Number(usageValue), service_type, cost, notes });
           break;
         }
         case "add_maintenance": {
@@ -1272,8 +1027,22 @@ _modalUpdateHours(vehicleId) {
           const name = val("vm-item-name");
           const typeEl = root.querySelector("input[name=vm-interval-type]:checked");
           const intervalType = typeEl ? typeEl.value : "distance";
+
+          // default empty threshold value to 0
+          const rawThreshold = val("vm-due-soon-threshold");
+          const due_soon_threshold = rawThreshold !== "" ? parseFloat(rawThreshold) : 0;
+
+          // validate threshold is non-negative and a number
+          if (isNaN(due_soon_threshold) || due_soon_threshold < 0) {
+            alert("Please enter a valid warning threshold (0 or greater).");
+            return;
+          }
+
           if (!name) { alert("Please enter an item name."); return; }
-          const serviceData = { vehicle_id, name };
+          const serviceData = { vehicle_id,
+                                name,
+                                due_soon_threshold // send to backend
+                              };
           if (intervalType === "distance") {
             const d = parseInt(val("vm-interval-distance"), 10);
             if (!d) { alert("Please enter a valid mileage interval."); return; }
@@ -1325,13 +1094,15 @@ _modalUpdateHours(vehicleId) {
     this._render();
   }
 
-  _callService(service, data) {
-    if (!this._hass) return;
-    this._hass.callService(DOMAIN, service, data).catch((err) => {
-      console.error(`[VehicleMinder] callService ${service} failed:`, err);
-    });
-  }
+ _callService(service, data) {
+  if (!this._hass) return;
 
+  this._hass.callService(DOMAIN, service, data).catch((err) => {
+    console.error(`[VehicleMinder] callService ${service} failed:`, err);
+
+    alert(err.message || "The service call failed. Please try again.");
+  });
+}
   _escape(str) {
     return String(str ?? "")
       .replace(/&/g, "&amp;")

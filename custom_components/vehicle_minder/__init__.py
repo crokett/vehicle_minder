@@ -6,6 +6,8 @@ import logging
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.http import HomeAssistantError, Path, StaticPathConfig
+
 import voluptuous as vol
 
 from .const import DOMAIN, PLATFORMS
@@ -28,6 +30,16 @@ async def async_setup_entry(
 ) -> bool:
     """Set up the integration from a config entry."""
 
+     # Register the frontend folder so files can be fetched via /vehicle_minder_assets/...
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                "/vehicle_minder_assets",
+                str(Path(__file__).parent / "frontend"),
+                cache_headers=False, # Set to True once stable for caching
+            )
+        ]
+    )
     # Register static frontend panel
     await async_setup_panel(hass)
 
@@ -68,7 +80,18 @@ async def async_setup_entry(
     async def handle_add_vehicle(call: ServiceCall) -> None:
         """Add a new vehicle to the fleet."""
         data = call.data
-        _LOGGER.info("Adding vehicle via service: %s", data)
+        _LOGGER.info("Adding vehicle via service: %s", data);
+        
+        current_mileage=data.get("current_mileage");
+        current_hours=data.get("current_hours");
+        use_hours=data.get("use_hours");
+
+        if use_hours:
+            if current_hours is None or current_hours <= 0:
+                raise HomeAssistantError("Hours must be greater than 0")
+        else:
+            if current_mileage is None or current_mileage <= 0:
+             raise HomeAssistantError("Mileage must be greater than 0")
 
         vehicle = Vehicle(
             make=data["make"],
@@ -77,11 +100,12 @@ async def async_setup_entry(
             name=data["name"],
             vehicle_type=data.get("vehicle_type", "car"),
             vin=data.get("vin"),
-            use_hours = call.data.get("use_hours", False),
-            current_mileage=data.get("current_mileage", 0),
-            current_hours=data.get("current_hours", 0.0),
+            use_hours = data.get("use_hours", False),
+            current_mileage = data.get("current_mileage"),
+            current_hours = data.get("current_hours"),
         )
-
+         
+        
         fleet[vehicle.vehicle_id] = vehicle
 
        
@@ -196,6 +220,7 @@ async def async_setup_entry(
 
         item = MaintenanceItem(
             name=call.data["name"],
+            due_soon_threshold=call.data["due_soon_threshold"],
             interval_distance=call.data.get("interval_distance"),
             interval_hours=call.data.get("interval_hours"),
             interval_months=call.data.get("interval_months"),
@@ -217,20 +242,40 @@ async def async_setup_entry(
             {
                 vol.Required("vehicle_id"): str,
                 vol.Required("name"): str,
+                vol.Optional("due_soon_threshold", default=0.0): vol.Coerce(float),
                 vol.Exclusive("interval_distance", "interval"): int,
                 vol.Exclusive("interval_hours", "interval"): int,
                 vol.Exclusive("interval_months", "interval"): int,
+
             }
         ),
     )
 
     # --- Service: add_service_record ---
     async def handle_add_service_record(call: ServiceCall) -> None:
+        
         """Add a completed service record to a specific vehicle."""
-        vehicle_id = call.data["vehicle_id"]
+        data = call.data
+        vehicle_id = data["vehicle_id"]
         if vehicle_id not in fleet:
             raise ValueError(f"Vehicle '{vehicle_id}' not found")
 
+        # get the uses hours for the vehicle:
+        vehicle = fleet[vehicle_id]
+        use_hours = vehicle.use_hours
+
+        usage_value = data.get("mileage")
+
+        if usage_value is None or usage_value <= 0:
+            if use_hours:
+                raise HomeAssistantError(
+                "Hours at service must be greater than zero."
+            )
+            else:
+                raise HomeAssistantError(
+                "Mileage at service must be greater than zero."
+            )
+       
         record = ServiceRecord(
             date=call.data["date"],
             mileage=call.data["mileage"],

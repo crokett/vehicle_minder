@@ -39,6 +39,7 @@ class VehicleMinderStore:
                     interval_distance=item_data.get("interval_distance"),
                     interval_hours=item_data.get("interval_hours"),
                     interval_months=item_data.get("interval_months"),
+                    due_soon_threshold=item_data.get("due_soon_threshold", 0.0),
                 )
                 for item_id, item_data in vehicle_data.get(
                     "maintenance_items", {}
