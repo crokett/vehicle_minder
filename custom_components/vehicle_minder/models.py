@@ -164,6 +164,7 @@ class Vehicle:
                 "name": item.name,
                 "last_service_date": last.date if last else None,
                 "last_service_mileage": last.mileage if last else None,
+                "not_tracked": last is None,
                 "overdue": False,
                 "overdue_by": None,
                 "due_soon": False,
@@ -175,10 +176,14 @@ class Vehicle:
                 "interval_value": None,
             }
 
+            if last is None:
+                statuses.append(entry)
+                continue
+
             if item.interval_distance is not None:
                 entry["interval_type"] = "distance"
                 entry["interval_value"] = item.interval_distance
-                last_mileage = last.mileage if last else 0
+                last_mileage = last.mileage
                 due_at = last_mileage + item.interval_distance
                 
                 overdue_by = self.current_mileage - due_at
@@ -199,8 +204,8 @@ class Vehicle:
                 entry["interval_type"] = "hours"
                 entry["interval_value"] = item.interval_hours
                 last_hours = 0.0
-                if last:
-                    last_hours = float(last.mileage)
+                
+                last_hours = float(last.mileage)
                 due_at = last_hours + item.interval_hours
                 
                 overdue_by = self.current_hours - due_at

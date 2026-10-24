@@ -32,13 +32,16 @@ tory and maintenance performed on your vehicles.  Service records are tied to a 
 #### [Maintenance Items](docs/maintenance_items.md)
 Maintenance Items track what needs to be maintained on each vehicle.  A vehicle carries it's own list of maintenance items. Maintenance items can be things like oil changes, filter changes, tire rotations, tire replacements or other service items.  See [Maintenance Items](docs/maintenance_items.md) for more details.  
 
+#### Overdue And Upcoming Maintenance Notification
+Vehicle Minder flags vehicles that have overdue maintenance items or maintenance that is due soon.  See [Maintenance Items](docs/maintenance_items.md) for more details. 
+
 ### Installation
 Vehicle Minder is a custom integration that gets installed in Home Assistant using [HACS]https://hacs.xyz/
 
 1.  In HACS,add  https://github.com/crokett/vehicle_minder as a custom repository with the Integration category.
 2.  Install Vehicle Minder and then restart Home Assistant
 3.  Go to Settings → Devices & Services → Add Integration → Home Keeper and add the integration
-4.  A Vehicle Minder panel appears in the sidebar. Your fleet is stored as a single JSON document on local storage.  The first time you open Vehicle Minder you need to set the default distance metric - Miles or Kilometers. This sets what is displayed for Vehicles in the fleet view.  
+4.  A Vehicle Minder panel appears in the sidebar. Your fleet is stored as a single JSON document on local storage.  The first time you open Vehicle Minder you need to set the default distance metric - Miles or Kilometers. This sets what is displayed for Vehicles in the fleet view.  Vehicles that use hours as the usage metric are not affected by this setting. 
 5.  Read [Fleet Management](docs/fleet.md) for instructions on how to get started and add your first vehicle
 
 [releases]: https://github.com/crokett/vehicle_minder/releases

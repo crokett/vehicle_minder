@@ -6,7 +6,9 @@ Service records are how you track the service history of each of your vehicles. 
 ![Vehicle Detail](img/vehicledetailview.png)
 
 ### Adding A Service Record
-When you add a service record you enter the miles (or hours) on the vehicle at the time of service.  You also have a drop down of maintnenace items to select from so that you know what was serviced.  You cannot add a service record for a maintenance item that does not exist on that vehicle.  This ensures that the overdue maintenance detection is accurate.  You can add a cost for the service, and you can add notes - tools uses, part numbers used, etc.  After entering all the information, click "Save Record". 
+When you add a service record you enter the miles (or hours) on the vehicle at the time of service.  The service record defaults to the current usage (mi, km, or hours) metric on the vehicle, but this can be changed. It is recommenended that you update the current miles or hours on the vehicle before adding a service record if these are different.  This ensures the maintenance item notifications are accurate.  The usage metric (mi/km/hr) on the Service Record cannot be 0 or empty.
+
+You also have a drop down of maintnenace items to select from so that you know what was serviced.  You cannot add a service record for a maintenance item that does not exist on that vehicle.  This ensures that the overdue maintenance detection is accurate.  You can add a cost for the service, and you can add notes - tools uses, part numbers used, etc.  After entering all the information, click "Save Record". 
 
 ![Service Records](img/addservicerecord.png)
  

@@ -31,6 +31,18 @@ function lastServicedDate(vehicle, itemName) {
   return matches.length ? matches[0].date : null;
 }
 
+function lastServicedInterval(vehicle,itemName) {
+
+  const records = Object.values(vehicle.service_records || {});
+  const matches = records
+    .filter((r) => r.service_type && r.service_type.toLowerCase() === itemName.toLowerCase())
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    return matches.length && matches[0].mileage != null
+      ? matches[0].mileage
+      : "-";
+
+}
+
 // Find the pre-computed status entry for a maintenance item by name.
 // Falls back to a simple local calculation if maintenance_status is absent
 // (e.g. before the sensor attribute propagates).
@@ -40,7 +52,7 @@ function getItemStatus(vehicle, itemName) {
 }
 
 function fmtOverdueBy(status) {
-  if (!status || !status.overdue) return null;
+  if (!status || status.not_tracked || !status.overdue) return null;
   const type = status.interval_type;
   const by = status.overdue_by;
   if (type === "distance") return `${fmt(by)} ${this._distanceLabelAbrv} overdue`;
@@ -50,7 +62,8 @@ function fmtOverdueBy(status) {
 }
 
 function fmtDueSoonBy(status){
-  if (!status || status.due_soon) return null;
+  //if (!status || status.due_soon) return null;
+  if (!status || status.not_tracked || !status.due_soon) return null;
   const type = status.interval_type;
   const remain = status.remaining;
   if (type === "distance") return `Due in: ${fmt(remain)} ${this._distanceLabelAbrv}`;
@@ -527,13 +540,21 @@ _renderDetailView() {
     const rows = items
       .map((item) => {
         let interval;
-        if (item.interval_distance) interval = `Every ${fmt(item.interval_distance)} ${this._distanceLabelAbrv}`;
-        else if (item.interval_hours) interval = `Every ${fmt(item.interval_hours)} hrs`;
-        else if (item.interval_months) interval = `Every ${fmt(item.interval_months)} month${item.interval_months !== 1 ? "s" : ""}`;
+        let intervalLabelAbrv = ""
+        if (item.interval_distance){ interval = `Every ${fmt(item.interval_distance)} ${this._distanceLabelAbrv}`;
+            intervalLabelAbrv = this._distanceLabelAbrv;
+          }
+        else if (item.interval_hours){ interval = `Every ${fmt(item.interval_hours)} hrs`;
+              intervalLabelAbrv = "hrs"
+        }
+        else if (item.interval_months){ interval = `Every ${fmt(item.interval_months)} month${item.interval_months !== 1 ? "s" : ""}`;
+               intervalLabelAbrv = "mos"
+      }
         else interval = "—";
 
         const status = getItemStatus(vehicle, item.name);
         const lastDate = status ? status.last_service_date : lastServicedDate(vehicle, item.name);
+        const lastInterval = lastServicedInterval(vehicle, item.name);
         const overdue = status && status.overdue;
         const due_soon = status && status.due_soon;
         const overdueLabel = overdue
@@ -554,7 +575,7 @@ _renderDetailView() {
         <td>${this._escape(item.name)}</td>
         <td>${interval}</td>
         <td>${lastDate ? fmtDate(lastDate) : '<span style="color:var(--secondary-text-color)">Never</span>'}</td>
-        <td>${overdueLabel}</td>
+        <td>${lastInterval} ${intervalLabelAbrv}</td>
         <td>${this._escape(item.due_soon_threshold)}</td>
       </tr>`;
       })
@@ -567,7 +588,7 @@ _renderDetailView() {
       </div>
       <table class="data-table">
         <thead><tr>
-          <th>Item</th><th>Interval</th><th>Last Serviced</th><th>Status</th><th>Threshold Due</th>
+          <th>Item</th><th>Interval</th><th>Date Last Serviced</th><th>Interval Last Serviced</th><th>Threshold Due</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -646,13 +667,13 @@ _modalAddVehicle() {
       <!-- Mileage Field (Visible by default) -->
       <div class="form-group" id="modal-mileage-wrap">
         <label class="form-label">Current ${this._distanceLabel}</label>
-        <input class="form-input" id="vm-mileage" type="number" placeholder="0" min="0">
+        <input class="form-input" id="vm-mileage" type="number" step="1" placeholder="0" min="1">
       </div>
 
       <!-- Hours Field (Hidden by default) -->
       <div class="form-group" id="modal-hours-wrap" style="display: none;">
         <label class="form-label">Current Hours</label>
-        <input class="form-input" id="vm-hours" type="number" step="0.1" placeholder="0" min="0">
+        <input class="form-input" id="vm-hours" type="number" step="1" placeholder="0" min="1">
       </div>
 
       <div class="form-group">
@@ -669,6 +690,14 @@ _modalAddVehicle() {
   _modalAddService(vehicleId) {
     
     const vehicle = this._fleet[vehicleId];
+    const currentValue = vehicle
+      ? vehicle.use_hours
+        ? vehicle.current_hours
+        : vehicle.current_mileage
+      : null;
+
+
+   
     // Build options from existing maintenance items for convenience
     const items = vehicle ? Object.values(vehicle.maintenance_items) : [];
     const datalist = items.length
@@ -677,14 +706,16 @@ _modalAddVehicle() {
 
     return this._modalWrap("Add Service Record", `
       ${datalist}
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Date *</label>
           <input class="form-input" id="vm-date" type="date" value="${new Date().toISOString().slice(0, 10)}">
         </div>
        <div class="form-group">
-          <label class="form-label">${vehicle && vehicle.use_hours ? "Hours at Service *" : `${this._distanceLabel} at Service *`}</label>
-          <input class="form-input" id="vm-svc-mileage" type="number" placeholder="${vehicle ? (vehicle.use_hours ? vehicle.current_hours : vehicle.current_mileage) : 0}" min="0">
+          <label class="form-label">${vehicle && vehicle.use_hours ? "Hours at Service (defaults to current vehicle hours)" :
+                  `${this._distanceLabel} at Service (defaults to current vehicle ${this._distanceLabel}) `}</label>
+          <input class="form-input" id="vm-svc-mileage" type="number" value="${currentValue ?? ""}" min="1">
         </div>
       </div>
       <div class="form-group">
@@ -707,7 +738,18 @@ _modalAddVehicle() {
   }
 
  _modalAddMaintenance(vehicleId) {
+   const showServiceMessage =
+  this._modal?.fromAddService === true;
+
   return this._modalWrap("Add Maintenance Item", `
+    ${showServiceMessage ? `
+    <div class="info-box">
+      ${ICON.info}
+      You have no maintenance items for this vehicle.
+      Add a maintenance item before creating a service record. 
+      Service records must be tied to a maintenance item.
+    </div>
+  ` : ""}
     <div class="form-group">
       <label class="form-label">Item Name *</label>
       <input class="form-input" id="vm-item-name" placeholder="e.g. Oil Change, Air Filter, Transmission Fluid">
@@ -766,7 +808,7 @@ _modalUpdateHours(vehicleId) {
   _modalUpdateMileage(vehicleId) {
     const vehicle = this._fleet[vehicleId];
     const current = vehicle ? vehicle.current_mileage : 0;
-    return this._modalWrap("Update ${this._distanceLabel}", `
+    return this._modalWrap(`Update ${this._distanceLabel}`, `
       <div class="form-group">
         <label class="form-label">Current ${this._distanceLabel}*</label>
         <input class="form-input" id="vm-new-mileage" type="number" value="${current}" min="0">
@@ -796,6 +838,10 @@ _modalUpdateHours(vehicleId) {
   // ── Event binding ──────────────────────────────────────────────────────────
 
   _bindEvents() {
+    // check for already bound events:
+     if (this._eventsBound) return;
+       this._eventsBound = true;
+
     const root = this.shadowRoot;
     // Listen for changes on the metric radio buttons to toggle visibility
     root.addEventListener("change", (e) => {
@@ -840,9 +886,27 @@ _modalUpdateHours(vehicleId) {
           this._render();
           break;
         case "open-modal":
+          const modalType = el.dataset.modal;
           this._modal = { type: el.dataset.modal, vehicleId: id };
+          
+          // check for no maintenace items while adding a service record
+          // service record must be tied to maintenace item
+          if (modalType === "add_service") {
+          const vehicle = this._fleet[id];
+          const items = vehicle
+             ? Object.values(vehicle.maintenance_items || {})
+            : [];
+
+        if (items.length === 0) {
+           this._modal = { type: "add_maintenance", vehicleId: id,  fromAddService: true,};
+           this._render();
+           break;
+          }
+        }
           this._render();
           break;
+        
+
         case "close-modal":
           this._modal = null;
           this._render();
@@ -905,11 +969,26 @@ _modalUpdateHours(vehicleId) {
           const mileage = root.getElementById("vm-mileage")?.value;
           const hours = root.getElementById("vm-hours")?.value;
 
-        // Construct exclusive payload property strictly using our clean boolean
-        const usageMetric = useHours 
-         ? { current_hours: parseFloat(hours || "0") } 
-          : { current_mileage: parseInt(mileage || "0", 10) };
-         
+          // Validate the usage metric that applies to this vehicle.
+        
+          if (useHours) {
+         if (hours === "" || hours == null || !Number.isFinite(Number(hours)) || Number(hours) <= 0) {
+            console.count("Hours validation alert");
+            alert("Hours must be greater than zero.");
+            return;
+         }
+         } else {
+          if (mileage === "" || mileage == null || !Number.isFinite(Number(mileage)) || Number(mileage) <= 0) {
+              console.count("Miles validation alert");
+              alert("Mileage must be greater than zero.");
+              return;
+          }
+          }
+
+// Construct the payload for the applicable usage metric.
+const usageMetric = useHours
+  ? { current_hours: parseFloat(hours) }
+  : { current_mileage: parseInt(mileage, 10) };
           this._callService("add_vehicle", {
             name, make, model, year,
             vehicle_type: vehicleType,
@@ -921,14 +1000,26 @@ _modalUpdateHours(vehicleId) {
         }
         
         case "add_service": {
+        const usageValue = val("vm-svc-mileage");
+
+          if (
+            usageValue === "" ||
+            usageValue == null ||
+            !Number.isFinite(Number(usageValue)) ||
+            Number(usageValue) <= 0
+          ) {
+            alert("Service hours or mileage must be greater than zero.");
+            return;
+          }
+            
           const vehicle_id = val("vm-vehicle-id");
           const date = val("vm-date");
-          const mileage = parseInt(val("vm-svc-mileage") || "0", 10);
+          
           const service_type = val("vm-service-type");
           const cost = parseFloat(val("vm-cost") || "0");
           const notes = val("vm-notes");
           if (!date || !service_type) { alert("Please fill in all required fields."); return; }
-          this._callService("add_service_record", { vehicle_id, date, mileage, service_type, cost, notes });
+          this._callService("add_service_record", { vehicle_id, date,   mileage: Number(usageValue), service_type, cost, notes });
           break;
         }
         case "add_maintenance": {
@@ -1003,13 +1094,15 @@ _modalUpdateHours(vehicleId) {
     this._render();
   }
 
-  _callService(service, data) {
-    if (!this._hass) return;
-    this._hass.callService(DOMAIN, service, data).catch((err) => {
-      console.error(`[VehicleMinder] callService ${service} failed:`, err);
-    });
-  }
+ _callService(service, data) {
+  if (!this._hass) return;
 
+  this._hass.callService(DOMAIN, service, data).catch((err) => {
+    console.error(`[VehicleMinder] callService ${service} failed:`, err);
+
+    alert(err.message || "The service call failed. Please try again.");
+  });
+}
   _escape(str) {
     return String(str ?? "")
       .replace(/&/g, "&amp;")
