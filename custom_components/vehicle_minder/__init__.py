@@ -181,6 +181,38 @@ async def async_setup_entry(
         ),
     )
 
+    # --- Service: update_service_record ---
+    async def handle_update_service_record(call):
+        vehicle_id = call.data["vehicle_id"]
+        record_id = call.data["record_id"]
+        mileage = call.data["mileage"]
+   
+        if vehicle_id not in fleet:
+                raise ValueError(f"Vehicle '{vehicle_id}' not found")
+        vehicle = fleet.get(vehicle_id)
+        record = vehicle.service_records.get(record_id)
+        if record is None:
+            raise HomeAssistantError(f"Service record {record_id} not found.")
+
+        record.mileage = mileage
+
+    await store.async_save(fleet)
+
+    runtime = hass.data[DOMAIN][entry.entry_id]
+    entity = runtime["entities"].get(vehicle_id)
+    if entity:
+        entity.async_write_ha_state()
+
+    hass.services.async_register(
+    DOMAIN,
+    "update_service_record",
+    handle_update_service_record,
+    schema=vol.Schema({
+        vol.Required("vehicle_id"): str,
+        vol.Required("record_id"): str,
+        vol.Required("mileage"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    }),
+)
     # --- Service: set_mileage ---
     async def handle_set_mileage(call: ServiceCall) -> None:
         """Set the current mileage for a vehicle."""
@@ -219,7 +251,7 @@ async def async_setup_entry(
             raise ValueError(f"Vehicle '{vehicle_id}' not found")
 
         item = MaintenanceItem(
-            name=call.data["name"],
+            name=call.data["maintenanceName"],
             due_soon_threshold=call.data["due_soon_threshold"],
             interval_distance=call.data.get("interval_distance"),
             interval_hours=call.data.get("interval_hours"),
@@ -241,7 +273,7 @@ async def async_setup_entry(
         schema=vol.Schema(
             {
                 vol.Required("vehicle_id"): str,
-                vol.Required("name"): str,
+                vol.Required("maintenanceName"): str,
                 vol.Optional("due_soon_threshold", default=0.0): vol.Coerce(float),
                 vol.Exclusive("interval_distance", "interval"): int,
                 vol.Exclusive("interval_hours", "interval"): int,

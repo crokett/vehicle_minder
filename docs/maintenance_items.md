@@ -8,15 +8,26 @@ Maintenance items are the list of items on each vehicle that need to be maintain
 
 ### Adding a Maintenance Item
 
-To add a maintenance item click "Add Maintenance Item in the title row of the Vehicle Detail Card or click the Maintenance Item tab in the Vehicle Detail view, then click "Add Item".  When you add a maintenance item, you select the service interval (miles, hours or months) for that maintenance item.   Miles or Hours should match the usage interval for the vehicle that you are adding to.  Use the "Months" metric for time based maintenance. Some items such as air filters might need to be replaced once per year.
+To add a maintenance item click "Add Maintenance Item in the title row of the Vehicle Detail Card or click the Maintenance Item tab in the Vehicle Detail view, then click "Add Item".  Click the dropdown to select the maintenancde item.  If it is not listed, click "Other" and add the custom maintenance item name. 
+
+![Add Maintenance Item](img/addmaintenanceitem.png)
+
+### Adding a Custom Maintenance Item
+![Add Custom Maintenance Item](img/addcustommaintenanceitem.png)
+
+ When you add a maintenance item, you select the service interval (miles, hours or months) for that maintenance item.   Miles or Hours should match the usage interval for the vehicle that you are adding to.  Use the "Months" metric for time based maintenance. Some items such as air filters might need to be replaced once per year.
+
+### Selecting The Usage Metric
 
 Select the correct usage metric, then enter the interval for that metric.  The interval metric cannot be 0 or empty.  The threshold setting can be left at 0.  If it is left at 0 you will not get Upcoming Maintenance notifications.  You will only be notified of overdue maintenance.  After entering all the data, click "Add Item"
 
-
+#### By Miles
 ![Maintance Item Miles](img/maintenanceitembymiles.png)
 
+#### By Hours
 ![Maintance Item Hours](img/maintenanceitembyhours.png)
 
+#### By Months
 ![Maintance Item Months](img/maintenanceitembymonths.png)
 
 ### Upcoming Maintenance

@@ -11,4 +11,8 @@ When you add a service record you enter the miles (or hours) on the vehicle at t
 You also have a drop down of maintnenace items to select from so that you know what was serviced.  You cannot add a service record for a maintenance item that does not exist on that vehicle.  This ensures that the overdue maintenance detection is accurate.  You can add a cost for the service, and you can add notes - tools uses, part numbers used, etc.  After entering all the information, click "Save Record". 
 
 ![Service Records](img/addservicerecord.png)
+
+### Modifying A Service Record
+You can modify an existing service record and update the milage. NOTE: You cannot set a usage metric (miles, kilometer or hours) that is more than the current vehicle mileage.  So if your vehicle current mileage in Vehicle Minder is 125,000 miles and you added a service record and performed service at 126,000 miles and want to update the service record to that mileage you must update the mileage on the vehicle first. 
  
+![Update Service Record](img/updateservicerecord.png)

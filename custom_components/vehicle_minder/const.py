@@ -5,3 +5,4 @@ DOMAIN = "vehicle_minder"
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
 ]
+

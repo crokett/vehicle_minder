@@ -6,8 +6,26 @@
  *   - Detail view: sidebar list + main pane with tabs (Service Records / Maintenance)
  */
 
+/*
 const DOMAIN = "vehicle_minder";
 
+const MAINTENANCE_ITEMS = [
+  "Oil Change",
+  "Tire Rotation",
+  "Air Filter",
+  "Cabin Air Filter",
+  "Brake Pads",
+  "Brake Fluid",
+  "Coolant",
+  "Transmission Fluid",
+  "Spark Plugs",
+  "Battery",
+  "Serpentine Belt",
+  "Other",
+];
+*/
+
+import { DOMAIN, MAINTENANCE_ITEMS } from "./constants.js";
 // ---------------------------------------------------------------------------
 // Utility helpers
 // ---------------------------------------------------------------------------
@@ -51,22 +69,22 @@ function getItemStatus(vehicle, itemName) {
   return statuses.find((s) => s.name.toLowerCase() === itemName.toLowerCase()) || null;
 }
 
-function fmtOverdueBy(status) {
+function fmtOverdueBy(status, distanceLabelAbrv) {
   if (!status || status.not_tracked || !status.overdue) return null;
   const type = status.interval_type;
   const by = status.overdue_by;
-  if (type === "distance") return `${fmt(by)} ${this._distanceLabelAbrv} overdue`;
+  if (type === "distance") return `${fmt(by)} ${distanceLabelAbrv} overdue`;
   if (type === "hours")    return `${fmt(by)} hrs overdue`;
   if (type === "months")   return `${by} day${by !== 1 ? "s" : ""} overdue`;
   return "overdue";
 }
 
-function fmtDueSoonBy(status){
+function fmtDueSoonBy(status, distanceLabelAbrv){
   //if (!status || status.due_soon) return null;
   if (!status || status.not_tracked || !status.due_soon) return null;
   const type = status.interval_type;
   const remain = status.remaining;
-  if (type === "distance") return `Due in: ${fmt(remain)} ${this._distanceLabelAbrv}`;
+  if (type === "distance") return `Due in: ${fmt(remain)} ${distanceLabelAbrv}`;
   if (type === "hours")    return `Due in: ${fmt(remain)} hrs overdue`;
   if (type === "months")   return `Due in: ${remain} day${remain !== 1 ? "s" : ""}`;
   return "due soon"
@@ -494,32 +512,53 @@ _renderDetailView() {
       return `
         <div class="section-label">
           <span>SERVICE RECORDS</span>
+         
           <button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="add_service" data-id="${vehicle.vehicle_id}">${ICON.plus} Add Record</button>
         </div>
         <div class="info-box">${ICON.info} No service records yet. Click <strong>&nbsp;+ Add Service Record&nbsp;</strong> to log the first one.</div>`;
     }
 
     const rows = records
-      .map(
-        (r) => `
-      <tr>
-        <td>${fmtDate(r.date)}</td>
-        <td>${this._escape(r.service_type)}</td>
-        <td>${fmt(r.mileage)} ${intervalLabelAbrv}</td>
-        <td>$${Number(r.cost).toFixed(2)}</td>
-        <td style="color:var(--secondary-text-color)">${this._escape(r.notes || "")}</td>
-      </tr>`
-      )
-      .join("");
+  .map(
+    (r) => `
+    <tr class="${this._selectedServiceRecordId === r.record_id ? "row-selected" : ""}">
+      <td>
+        <input
+          type="radio"
+          name="selected-service-record"
+          data-action="select-service-record"
+          data-record-id="${r.record_id}"
+          value="${r.record_id}"
+          ${this._selectedServiceRecordId === r.record_id ? "checked" : ""}
+        >
+      </td>
+      <td>${fmtDate(r.date)}</td>
+      <td>${this._escape(r.service_type)}</td>
+      <td>${fmt(r.mileage)} ${intervalLabelAbrv}</td>
+      <td>$${Number(r.cost).toFixed(2)}</td>
+      <td style="color:var(--secondary-text-color)">${this._escape(r.notes || "")}</td>
+    </tr>`
+  )
+  .join("");
 
     return `
       <div class="section-label">
         <span>SERVICE RECORDS</span>
-        <button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="add_service" data-id="${vehicle.vehicle_id}">${ICON.plus} Add Record</button>
+        <div style="display: flex; gap: 8px; margin-left: auto;">
+          <button class="btn btn-secondary btn-sm" data-action="open-modal" data-modal="update_service" data-id="${vehicle.vehicle_id}"
+              data-record-id="${this._selectedServiceRecordId}"  ${!this._selectedServiceRecordId ? "disabled" : ""}> Update Service Record </button>
+          <button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="add_service" 
+            data-id="${vehicle.vehicle_id}">${ICON.plus} Add Record</button>
+        </div>
       </div>
       <table class="data-table">
         <thead><tr>
-          <th>Date</th><th>Service Type</th><th>${intervalLabel}</th><th>Cost</th><th>Notes</th>
+          <th>Select</th>
+          <th>Date</th>
+          <th>Service Type</th>
+          <th>${intervalLabel}</th>
+          <th>Cost</th>
+          <th>Notes</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
@@ -562,9 +601,9 @@ _renderDetailView() {
         
 
         status && status.overdue
-          ? `<span class="status-chip status-chip--overdue">${ICON.warning} ${fmtOverdueBy(status)}</span>`
+          ? `<span class="status-chip status-chip--overdue">${ICON.warning} ${fmtOverdueBy(status, this._distanceLabelAbrv)}</span>`
           : status && status.due_soon
-            ? `<span class="status-chip status-chip--due-soon">${ICON.warning} ${fmtDueSoonBy(status)}</span>`
+            ? `<span class="status-chip status-chip--due-soon">${ICON.warning} ${fmtDueSoonBy(status, this._distanceLabelAbrv)}</span>`
             : status && status.last_service_date
               ? `<span class="status-chip status-chip--ok">${ICON.check} OK</span>`
               : `<span class="status-chip status-chip--unknown">—</span>`;
@@ -598,10 +637,11 @@ _renderDetailView() {
 
   _renderModal() {
     if (!this._modal) return "";
-    const { type, vehicleId } = this._modal;
+    const { type, vehicleId, recordId } = this._modal;
     switch (type) {
       case "add_vehicle":     return this._modalAddVehicle();
       case "add_service":     return this._modalAddService(vehicleId);
+      case "update_service":  return this._modalUpdateServiceRecord(vehicleId, recordId);
       case "add_maintenance": return this._modalAddMaintenance(vehicleId);
       case "update_mileage":  return this._modalUpdateMileage(vehicleId);
       case "update_hours":    return this._modalUpdateHours(vehicleId);
@@ -611,8 +651,8 @@ _renderDetailView() {
   }
 
   _modalWrap(title, body, submitLabel = "Save") {
-    return `
-    
+
+    const content = `
       <div class="modal-overlay" data-action="close-modal-overlay">
         <div class="modal">
           <div class="modal-header">
@@ -626,11 +666,12 @@ _renderDetailView() {
           </div>
         </div>
       </div>`;
+
+    return content;
   }
 
 _modalAddVehicle() {
-    return this._modalWrap(`
-      <div class="form-group">
+  const content = `<div class="form-group">
         <label class="form-label">Display Name *</label>
         <input class="form-input" id="vm-name" placeholder="e.g. Family SUV">
       </div>
@@ -683,8 +724,9 @@ _modalAddVehicle() {
       <div class="form-group">
         <label class="form-label">Vehicle Type *</label>
         <input class="form-input" id="vm-vehicle-type" placeholder="e.g. car, mower, boat" value="car">
-      </div>
-    `, "Add Vehicle");
+      </div>`;
+
+    return this._modalWrap(content, "Add Vehicle");
   }
 
   _modalAddService(vehicleId) {
@@ -695,20 +737,14 @@ _modalAddVehicle() {
         ? vehicle.current_hours
         : vehicle.current_mileage
       : null;
-
-
-   
     // Build options from existing maintenance items for convenience
     const items = vehicle ? Object.values(vehicle.maintenance_items) : [];
     const datalist = items.length
       ? `<datalist id="vm-service-types">${items.map((i) => `<option value="${this._escape(i.name)}">`).join("")}</datalist>`
       : "";
-
-    return this._modalWrap("Add Service Record", `
-      ${datalist}
-
-      <div class="form-row">
-        <div class="form-group">
+    const content = `${datalist}
+                     <div class="form-row">
+         <div class="form-group">
           <label class="form-label">Date *</label>
           <input class="form-input" id="vm-date" type="date" value="${new Date().toISOString().slice(0, 10)}">
         </div>
@@ -733,16 +769,20 @@ _modalAddVehicle() {
         <label class="form-label">Notes</label>
         <textarea class="form-textarea" id="vm-notes" placeholder="Any additional details…"></textarea>
       </div>
-      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
-    `, "Save Record");
+      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">`;
+
+    return this._modalWrap("Add Service Record", content, "Save Record");
   }
 
  _modalAddMaintenance(vehicleId) {
+
+  const maintenanceOptions = MAINTENANCE_ITEMS
+  .map(item => `<option value="${item}">${item}</option>`)
+  .join("");
+
    const showServiceMessage =
   this._modal?.fromAddService === true;
-
-  return this._modalWrap("Add Maintenance Item", `
-    ${showServiceMessage ? `
+  const content = `${showServiceMessage ? `
     <div class="info-box">
       ${ICON.info}
       You have no maintenance items for this vehicle.
@@ -752,8 +792,18 @@ _modalAddVehicle() {
   ` : ""}
     <div class="form-group">
       <label class="form-label">Item Name *</label>
-      <input class="form-input" id="vm-item-name" placeholder="e.g. Oil Change, Air Filter, Transmission Fluid">
+       <select class="form-input" id="vm-item-name">
+      <option value="">Select a maintenance item</option>
+      ${maintenanceOptions}
+      </select>
     </div>
+
+    <div class="form-group" id="vm-custom-maintenance-wrap" style="display:none;">
+    <label class="form-label">Custom Maintenance Item</label>
+    <input class="form-input" id="vm-custom-item-name"
+           type="text" placeholder="Enter maintenance item">
+  </div>
+
     <div class="form-group">
       <label class="form-label">Interval Type *</label>
       <div class="interval-toggle">
@@ -785,54 +835,67 @@ _modalAddVehicle() {
       </label>
       <input class="form-input" id="vm-due-soon-threshold" type="number" placeholder="0" min="0">
     </div>
-    <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
-  `, "Add Item");
+    <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">`;
+
+  return this._modalWrap("Add Maintenance Item", content, "Add Item");
 }
 
 _modalUpdateHours(vehicleId) {
     const vehicle = this._fleet[vehicleId];
     const currentHours = vehicle ? (vehicle.current_hours || 0) : 0;
-    
-    return this._modalWrap("Update Hours", `
-      <div class="form-group">
+    const content = ` <div class="form-group">
         <label class="form-label">Current Operating Hours *</label>
         <input class="form-input" id="vm-new-hours" type="number" step="0.1" value="${currentHours}" min="0">
       </div>
       <p style="font-size:.83rem;color:var(--secondary-text-color);margin:0">
         Current recorded hours: <strong>${currentHours} hrs</strong>
       </p>
-      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
-    `, "Update");
+      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">`;
+    return this._modalWrap("Update Hours", content, "Update");
   }
 
   _modalUpdateMileage(vehicleId) {
     const vehicle = this._fleet[vehicleId];
     const current = vehicle ? vehicle.current_mileage : 0;
-    return this._modalWrap(`Update ${this._distanceLabel}`, `
-      <div class="form-group">
+    const content = ` <div class="form-group">
         <label class="form-label">Current ${this._distanceLabel}*</label>
         <input class="form-input" id="vm-new-mileage" type="number" value="${current}" min="0">
       </div>
       <p style="font-size:.83rem;color:var(--secondary-text-color);margin:0">
         Current recorded ${this._distanceLabel}: <strong>${fmt(current)} ${this._distanceLabelAbrv}</strong>
       </p>
-      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
-    `, "Update");
+      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}"> `;
+
+    return this._modalWrap(`Update Vehicle ${this._distanceLabel}`, content , "Update");
+  }
+
+  _modalUpdateServiceRecord(vehicleID, srID){
+    const vehicle = this._fleet[vehicleID];
+    const currentmiles = vehicle ? vehicle.current_mileage : 0;
+    const usage_metric = vehicle.use_hours ? "Hours" : this._distanceLabel;
+    const content = `<div class="form-group">
+       <label class="form-label"> New ${usage_metric}</label>
+        <input class="form-input" id="sr-new-mileage" type="number" value="${currentmiles}" min="0"></input>
+      </div>
+       <input type="hidden" id="vm-vehicle-id" value="${vehicleID}">
+       <input type="hidden" id="vm-service-record-id" value="${srID}">`;
+
+    return this._modalWrap(`Update Service Record`,content, "Update"
+    );
   }
 
   _modalDeleteVehicle(vehicleId) {
     const vehicle = this._fleet[vehicleId];
     const name = vehicle ? vehicle.name : vehicleId;
-    return this._modalWrap("Delete Vehicle", `
-      <p style="margin:0;line-height:1.6">
+    const content = `<p style="margin:0;line-height:1.6">
         Are you sure you want to delete <strong>${this._escape(name)}</strong>?
       </p>
       <p style="margin:8px 0 0;font-size:.85rem;color:var(--error-color,#db4437)">
         This will permanently remove the vehicle and all its service records
         and maintenance items. This cannot be undone.
       </p>
-      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">
-    `, "Delete");
+      <input type="hidden" id="vm-vehicle-id" value="${vehicleId}">`;
+    return this._modalWrap("Delete Vehicle", content, "Delete");
   }
 
   // ── Event binding ──────────────────────────────────────────────────────────
@@ -856,12 +919,26 @@ _modalUpdateHours(vehicleId) {
           hoursWrap.style.display = isHours ? "block" : "none";
         }
       }
+      // Handle service-record selection
+      if (e.target.dataset.action === "select-service-record") {
+          this._selectedServiceRecordId = e.target.value;
+        this._render();
+      }
+
+      //handle maintenance item "other" selection
+      if (e.target.id === "vm-item-name") {
+      const customWrap = root.getElementById("vm-custom-maintenance-wrap");
+
+      if (customWrap) {
+      customWrap.style.display =
+      e.target.value === "Other" ? "block" : "none";
+      }}
     });
 
     root.addEventListener("click", (e) => {
       const el = e.target.closest("[data-action]");
       if (!el) return;
-
+      // alert("Action clicked: " + el.dataset.action);
       // Prevent vehicle row click when clicking action badges
       if (e.target.closest("[data-stop-propagation]")) {
         e.stopPropagation();
@@ -869,7 +946,6 @@ _modalUpdateHours(vehicleId) {
 
       const action = el.dataset.action;
       const id = el.dataset.id;
-
       switch (action) {
         case "select-vehicle":
           this._selectedId = id;
@@ -885,10 +961,15 @@ _modalUpdateHours(vehicleId) {
           this._activeTab = el.dataset.tab;
           this._render();
           break;
+
         case "open-modal":
-          const modalType = el.dataset.modal;
-          this._modal = { type: el.dataset.modal, vehicleId: id };
-          
+         const modalType = el.dataset.modal;
+
+            this._modal = {
+              type: modalType,
+              vehicleId: id,
+              ...(el.dataset.recordId ? { recordId: el.dataset.recordId } : {}),
+            };
           // check for no maintenace items while adding a service record
           // service record must be tied to maintenace item
           if (modalType === "add_service") {
@@ -1025,6 +1106,11 @@ const usageMetric = useHours
         case "add_maintenance": {
           const vehicle_id = val("vm-vehicle-id");
           const name = val("vm-item-name");
+          const customName = val("vm-custom-item-name")
+          const maintenanceName = name === "Other"
+               ? customName.trim()
+                : name;
+
           const typeEl = root.querySelector("input[name=vm-interval-type]:checked");
           const intervalType = typeEl ? typeEl.value : "distance";
 
@@ -1038,9 +1124,9 @@ const usageMetric = useHours
             return;
           }
 
-          if (!name) { alert("Please enter an item name."); return; }
+          if (!maintenanceName) { alert("Please enter an item name."); return; }
           const serviceData = { vehicle_id,
-                                name,
+                                maintenanceName,
                                 due_soon_threshold // send to backend
                               };
           if (intervalType === "distance") {
@@ -1069,12 +1155,56 @@ const usageMetric = useHours
         }
 
         case "update_mileage": {
+
           const vehicle_id = val("vm-vehicle-id");
           const mileage = parseInt(val("vm-new-mileage"), 10);
+          const vehicle = this._fleet[vehicle_id];
+          
+          const usage_metric = vehicle.use_hours ? "Hours" : this._distanceLabel;
           if (isNaN(mileage)) { alert("Please enter a valid mileage."); return; }
           this._callService("set_mileage", { vehicle_id, mileage });
           break;
         }
+
+        case "update_service": {
+          const vehicle_id = val("vm-vehicle-id");
+          const vehicle = this._fleet[vehicle_id];
+          const current = vehicle.current_mileage;
+          const record_id = val("vm-service-record-id");
+          const mileage = parseInt(val("sr-new-mileage"), 10);
+          const usage_metric = vehicle.use_hours ? "Hours" : this._distanceLabel;
+ 
+          if (isNaN(mileage) || mileage <= 0) {
+             alert("Please enter a valid mileage.");
+            return;
+            }
+          
+          if (mileage > current) {
+              // alert(`Service Record ${usage_metric} cannot be  more than the vehicle's current reading. Update the vehicle  ${usage_metric}
+              //  before updating the service record`);
+               const updateVehicle = confirm(
+              `Service Record ${usage_metric} exceeds the vehicle's current reading. Would you like to update the vehicle's current reading?`
+               );
+
+              if (updateVehicle) {
+                this._modal = {
+                      type: "update_mileage",
+                      vehicleId: vehicle_id
+                      };
+                  this._render();
+              }
+               return;
+          }
+
+         
+          this._callService("update_service_record", {
+           vehicle_id,
+          record_id,
+          mileage
+           });
+          break;
+        }
+
         case "delete_vehicle": {
           const vehicle_id = val("vm-vehicle-id");
           this._callService("delete_vehicle", { vehicle_id });

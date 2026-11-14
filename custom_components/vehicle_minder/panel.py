@@ -42,7 +42,7 @@ async def async_setup_panel(hass: HomeAssistant) -> None:
                     "name": "vehicle-minder-panel",
                     "embed_iframe": False,
                     "trust_external": True,
-                    "js_url": "/vehicle_minder_static/vehicle-minder-panel.js",
+                    "module_url": "/vehicle_minder_static/vehicle-minder-panel.js",
                 }
             },
             require_admin=False,
